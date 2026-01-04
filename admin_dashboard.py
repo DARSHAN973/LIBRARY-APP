@@ -16,6 +16,8 @@ from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from dashboard_layout import load_dashboard_content
+from manage_books import load_manage_books_content
+from manage_users import load_manage_users_content
 
 
 class AdminDashboard(MDScreen):
@@ -203,6 +205,7 @@ class AdminDashboard(MDScreen):
         self.menu_items = [
             ("Dashboard", "view-dashboard", "dashboard"),
             ("Manage Books", "book-multiple", "manage_books"),
+            ("Manage Users", "account-multiple", "manage_users"),
             ("Manage Users", "account-multiple", "manage_users"),
             ("Admin Auth", "shield-account", "admin_authentication"),
             ("Settings", "cog", "system_settings")
@@ -414,6 +417,8 @@ class AdminDashboard(MDScreen):
             self.load_manage_books()
         elif section == 'manage_users':
             self.load_manage_users()
+        elif section == 'manage_users':
+            self.load_manage_users()
         elif section == 'admin_authentication':
             self.load_admin_auth()
         elif section == 'system_settings':
@@ -424,80 +429,12 @@ class AdminDashboard(MDScreen):
         load_dashboard_content(self.content_scroll, self.navigate_to)
         
     def load_manage_books(self):
-        """Load manage books - full page"""
-        container = BoxLayout(orientation='vertical', spacing=dp(15), size_hint_y=None)
-        container.bind(minimum_height=container.setter('height'))
-        
-        # Page title
-        title = MDLabel(
-            text="📚 Manage Books",
-            font_style='H5',
-            theme_text_color='Primary',
-            size_hint_y=None,
-            height=dp(40)
-        )
-        container.add_widget(title)
-        
-        # Description
-        desc = MDLabel(
-            text="Control and organize your library collection",
-            font_style='Caption',
-            theme_text_color='Secondary',
-            size_hint_y=None,
-            height=dp(30)
-        )
-        container.add_widget(desc)
-        
-        # Action cards
-        actions = [
-            ("Add New Book", "📖", "Add books manually or via form"),
-            ("Import Books", "📥", "Import from JSON or CSV file"),
-            ("Edit Books", "✏️", "Modify existing book details"),
-            ("Delete Books", "🗑️", "Remove books from library"),
-            ("Search Books", "🔍", "Find books by title, author, etc.")
-        ]
-        
-        for action_title, icon, action_desc in actions:
-            card = BoxLayout(
-                orientation='horizontal',
-                size_hint_y=None,
-                height=dp(70),
-                padding=dp(10),
-                spacing=dp(10)
-            )
-            
-            with card.canvas.before:
-                Color(0.9, 0.9, 0.9, 1)
-                card.rect = Rectangle(size=card.size, pos=card.pos)
-            card.bind(size=lambda i, v: setattr(i.rect, 'size', i.size))
-            card.bind(pos=lambda i, v: setattr(i.rect, 'pos', i.pos))
-            
-            card.add_widget(MDLabel(
-                text=icon,
-                font_style='H4',
-                size_hint_x=0.2
-            ))
-            
-            text_box = BoxLayout(orientation='vertical', spacing=dp(2))
-            text_box.add_widget(MDLabel(
-                text=action_title,
-                font_style='Subtitle1',
-                theme_text_color='Primary',
-                size_hint_y=None,
-                height=dp(25)
-            ))
-            text_box.add_widget(MDLabel(
-                text=action_desc,
-                font_style='Caption',
-                theme_text_color='Secondary',
-                size_hint_y=None,
-                height=dp(20)
-            ))
-            card.add_widget(text_box)
-            
-            container.add_widget(card)
-        
-        self.content_scroll.add_widget(container)
+        """Load manage books - modern table-based interface"""
+        load_manage_books_content(self.content_scroll, self)
+    
+    def load_manage_users(self):
+        """Load manage users - card-based interface"""
+        load_manage_users_content(self.content_scroll, self)
         
     def load_manage_users(self):
         """Load manage users - full page"""
