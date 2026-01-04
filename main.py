@@ -430,97 +430,9 @@ class LoginScreen(MDScreen):
             self.manager.get_screen('admin_dashboard').set_admin_name(username)
             self.manager.current = 'admin_dashboard'
         else:
-            self.manager.get_screen('user_dashboard').set_user_name(username)
-            self.manager.current = 'user_dashboard'
-
-
-class UserDashboard(MDScreen):
-    """User Dashboard - Browse and view books"""
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.name = 'user_dashboard'
-        self.username = ''
-        self.build_ui()
-        
-    def set_user_name(self, username):
-        """Set logged-in username"""
-        self.username = username
-        self.welcome_label.text = f"Welcome, {username}!"
-        
-    def build_ui(self):
-        """Build user dashboard UI"""
-        layout = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10))
-        
-        # Set background
-        with layout.canvas.before:
-            Color(0.95, 0.95, 0.97, 1)
-            self.rect = Rectangle(size=layout.size, pos=layout.pos)
-        layout.bind(size=self._update_rect, pos=self._update_rect)
-        
-        # Header
-        header = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(60), spacing=dp(10))
-        
-        self.welcome_label = MDLabel(
-            text="Welcome, User!",
-            font_style='H6',
-            theme_text_color='Primary',
-            size_hint_x=0.7
-        )
-        header.add_widget(self.welcome_label)
-        
-        logout_btn = MDFlatButton(
-            text="Logout",
-            size_hint=(0.3, 1),
-            on_press=self.logout
-        )
-        header.add_widget(logout_btn)
-        layout.add_widget(header)
-        
-        # Content area - Placeholder
-        content = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(15))
-        
-        icon = MDLabel(
-            text="📖",
-            font_style='H2',
-            halign='center',
-            size_hint_y=None,
-            height=dp(80)
-        )
-        content.add_widget(icon)
-        
-        title = MDLabel(
-            text="User Dashboard",
-            font_style='H5',
-            halign='center',
-            theme_text_color='Primary',
-            size_hint_y=None,
-            height=dp(40)
-        )
-        content.add_widget(title)
-        
-        subtitle = MDLabel(
-            text="Book browsing and details coming soon...",
-            font_style='Body1',
-            halign='center',
-            theme_text_color='Secondary',
-            size_hint_y=None,
-            height=dp(30)
-        )
-        content.add_widget(subtitle)
-        
-        layout.add_widget(content)
-        self.add_widget(layout)
-        
-    def _update_rect(self, instance, value):
-        """Update background"""
-        self.rect.pos = instance.pos
-        self.rect.size = instance.size
-        
-    def logout(self, instance):
-        """Logout and return to login screen"""
-        self.manager.current = 'login'
-        print(f"✓ User {self.username} logged out")
+            # Load user dashboard - coming soon
+            print(f"✓ User login not yet implemented. Please use admin account.")
+            self.error_label.text = "User dashboard coming soon. Please use admin account."
 
 class LibraryApp(MDApp):
     """Main Application Class"""
@@ -534,7 +446,6 @@ class LibraryApp(MDApp):
         # Screen Manager
         sm = ScreenManager()
         sm.add_widget(LoginScreen())
-        sm.add_widget(UserDashboard())
         sm.add_widget(AdminDashboard())
         
         return sm

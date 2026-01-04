@@ -29,9 +29,9 @@ def create_user_card(user_data, view_callback, toggle_status_callback, delete_ca
     card = BoxLayout(
         orientation='vertical',
         size_hint_y=None,
-        height=dp(110),
-        padding=dp(14),
-        spacing=dp(10)
+        height=dp(130),
+        padding=dp(16),
+        spacing=dp(12)
     )
     
     # Card background
@@ -76,16 +76,16 @@ def create_user_card(user_data, view_callback, toggle_status_callback, delete_ca
     status_box = BoxLayout(
         orientation='horizontal',
         size_hint_x=None,
-        width=dp(80),
+        width=dp(85),
         spacing=dp(4),
-        padding=[dp(6), dp(4)]
+        padding=[dp(8), dp(4)]
     )
     
     # Status badge background
-    status_color = (0.30, 0.69, 0.31, 0.2) if is_active else (0.96, 0.26, 0.21, 0.2)
+    status_color = (0.30, 0.69, 0.31, 0.15) if is_active else (0.96, 0.26, 0.21, 0.15)
     with status_box.canvas.before:
         Color(*status_color)
-        status_box.bg = RoundedRectangle(size=status_box.size, pos=status_box.pos, radius=[dp(12)])
+        status_box.bg = RoundedRectangle(size=status_box.size, pos=status_box.pos, radius=[dp(14)])
     
     def update_status_bg(instance, value):
         status_box.bg.size = instance.size
@@ -100,7 +100,7 @@ def create_user_card(user_data, view_callback, toggle_status_callback, delete_ca
         text_color=(0.30, 0.69, 0.31, 1) if is_active else (0.96, 0.26, 0.21, 1),
         font_size='16sp',
         size_hint_x=None,
-        width=dp(20)
+        width=dp(22)
     )
     status_box.add_widget(status_icon)
     
@@ -108,6 +108,7 @@ def create_user_card(user_data, view_callback, toggle_status_callback, delete_ca
     status_label = MDLabel(
         text='Active' if is_active else 'Inactive',
         font_style='Caption',
+        bold=True,
         theme_text_color='Custom',
         text_color=(0.30, 0.69, 0.31, 1) if is_active else (0.96, 0.26, 0.21, 1),
         size_hint_x=1
@@ -197,7 +198,13 @@ def load_manage_users_content(content_scroll, parent_instance):
     
     # State variables
     state = {
-        'search_text': ''
+        'current_page': 1,
+        'users_per_page': 15,
+        'total_users': 0,
+        'total_pages': 1,
+        'search_text': '',
+        'pagination_top': None,
+        'pagination_bottom': None
     }
     
     # ==================== HEADER ====================
@@ -232,7 +239,7 @@ def load_manage_users_content(content_scroll, parent_instance):
         icon='refresh',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
-        on_release=lambda x: load_users(users_container, state, search_field, parent_instance)
+        on_release=lambda x: load_users(users_container, pagination_container, state, search_field, parent_instance)
     )
     header_box.add_widget(refresh_btn)
     
@@ -245,7 +252,24 @@ def load_manage_users_content(content_scroll, parent_instance):
         size_hint_y=None,
         height=dp(50)
     )
+    
+    # Wire up search with text change
+    def on_search_text(instance, value):
+        state['search_text'] = value
+        state['current_page'] = 1
+        load_users(users_container, pagination_container, state, search_field, parent_instance)
+    
+    search_field.bind(text=on_search_text)
     main_container.add_widget(search_field)
+    
+    # ==================== PAGINATION (TOP) ====================
+    pagination_container = BoxLayout(
+        orientation='vertical',
+        size_hint_y=None,
+        height=dp(50)
+    )
+    main_container.add_widget(pagination_container)
+    state['pagination_top'] = pagination_container
     
     # ==================== USERS CONTAINER ====================
     users_container = BoxLayout(
@@ -255,6 +279,15 @@ def load_manage_users_content(content_scroll, parent_instance):
     )
     users_container.bind(minimum_height=users_container.setter('height'))
     main_container.add_widget(users_container)
+    
+    # ==================== PAGINATION (BOTTOM) ====================
+    pagination_bottom = BoxLayout(
+        orientation='vertical',
+        size_hint_y=None,
+        height=dp(50)
+    )
+    main_container.add_widget(pagination_bottom)
+    state['pagination_bottom'] = pagination_bottom
     
     # ==================== FOOTER ====================
     footer_container = BoxLayout(
@@ -306,97 +339,161 @@ def load_manage_users_content(content_scroll, parent_instance):
     
     main_container.add_widget(footer_container)
     
-    # Wire up search
-    def on_search(instance):
-        state['search_text'] = search_field.text
-        load_users(users_container, state, search_field, parent_instance)
-    
-    search_field.bind(on_text_validate=on_search)
-    
     # Initial load
     content_scroll.add_widget(main_container)
-    Clock.schedule_once(lambda dt: load_users(users_container, state, search_field, parent_instance), 0.1)
+    Clock.schedule_once(lambda dt: load_users(users_container, pagination_container, state, search_field, parent_instance), 0.1)
 
 
-def load_users(users_container, state, search_field, parent_instance):
-    """Load users with search filter"""
-    
-    # Clear and show loading indicator
-    users_container.clear_widgets()
-    
-    loading_box = BoxLayout(
-        orientation='vertical',
+def create_pagination_controls(current_page, total_pages, callback):
+    """Create pagination controls"""
+    pagination = BoxLayout(
+        orientation='horizontal',
         size_hint_y=None,
-        height=dp(120),
-        padding=dp(20)
+        height=dp(50),
+        spacing=dp(8),
+        padding=dp(10)
     )
     
-    spinner = MDSpinner(
-        size_hint=(None, None),
-        size=(dp(46), dp(46)),
-        pos_hint={'center_x': 0.5},
-        active=True
+    # Previous button
+    prev_btn = MDIconButton(
+        icon='chevron-left',
+        theme_text_color='Custom',
+        text_color=(0.13, 0.59, 0.95, 1) if current_page > 1 else (0.7, 0.7, 0.7, 1),
+        disabled=current_page <= 1,
+        on_release=lambda x: callback(current_page - 1)
     )
+    pagination.add_widget(prev_btn)
     
-    loading_label = MDLabel(
-        text="Loading users...",
-        font_style='Body1',
-        theme_text_color='Secondary',
+    # Page info
+    page_label = MDLabel(
+        text=f"Page {current_page} of {total_pages}",
+        font_style='Body2',
+        theme_text_color='Primary',
         halign='center',
-        size_hint_y=None,
-        height=dp(30)
+        size_hint_x=1
     )
+    pagination.add_widget(page_label)
     
-    loading_box.add_widget(spinner)
-    loading_box.add_widget(loading_label)
-    users_container.add_widget(loading_box)
+    # Next button
+    next_btn = MDIconButton(
+        icon='chevron-right',
+        theme_text_color='Custom',
+        text_color=(0.13, 0.59, 0.95, 1) if current_page < total_pages else (0.7, 0.7, 0.7, 1),
+        disabled=current_page >= total_pages,
+        on_release=lambda x: callback(current_page + 1)
+    )
+    pagination.add_widget(next_btn)
+    
+    return pagination
+
+
+def load_users(users_container, pagination_container, state, search_field, parent_instance, update_pagination_only=False):
+    """Load users with pagination and search filter"""
+    
+    if not update_pagination_only:
+        # Clear and show loading indicator
+        users_container.clear_widgets()
+        
+        loading_box = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(120),
+            padding=dp(20)
+        )
+        
+        spinner = MDSpinner(
+            size_hint=(None, None),
+            size=(dp(46), dp(46)),
+            pos_hint={'center_x': 0.5},
+            active=True
+        )
+        
+        loading_label = MDLabel(
+            text="Loading users...",
+            font_style='Body1',
+            theme_text_color='Secondary',
+            halign='center',
+            size_hint_y=None,
+            height=dp(30)
+        )
+        
+        loading_box.add_widget(spinner)
+        loading_box.add_widget(loading_label)
+        users_container.add_widget(loading_box)
     
     # Build query
     conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     
-    query = """
-        SELECT id, username, email, is_active, created_at, last_login
-        FROM users
-        WHERE 1=1
-    """
+    # Count total users (searches entire database)
+    count_query = "SELECT COUNT(*) FROM users WHERE 1=1"
     params = []
     
     # Search filter
     if search_field.text.strip():
         search_term = f"%{search_field.text.strip()}%"
-        query += " AND (username LIKE ? OR email LIKE ? OR CAST(id AS TEXT) LIKE ?)"
-        params.extend([search_term, search_term, search_term])
+        count_query += " AND (username LIKE ? OR email LIKE ? OR phone LIKE ? OR CAST(id AS TEXT) LIKE ?)"
+        params.extend([search_term, search_term, search_term, search_term])
     
-    query += " ORDER BY created_at DESC"
+    cursor.execute(count_query, params)
+    state['total_users'] = cursor.fetchone()[0]
+    state['total_pages'] = max(1, (state['total_users'] + state['users_per_page'] - 1) // state['users_per_page'])
     
-    cursor.execute(query, params)
+    # Ensure current page is valid
+    if state['current_page'] > state['total_pages']:
+        state['current_page'] = state['total_pages']
+    
+    # Get users for current page
+    offset = (state['current_page'] - 1) * state['users_per_page']
+    data_query = count_query.replace("COUNT(*)", "id, username, email, is_active, created_at, last_login")
+    data_query += f" ORDER BY created_at DESC LIMIT {state['users_per_page']} OFFSET {offset}"
+    
+    cursor.execute(data_query, params)
     users = cursor.fetchall()
     conn.close()
     
-    # Clear loading and add users
-    users_container.clear_widgets()
-    
-    if users:
-        for user in users:
-            card = create_user_card(
-                user,
-                lambda user_id: show_user_details(user_id, parent_instance),
-                lambda user_id, current_status: show_toggle_status_confirmation(user_id, current_status, parent_instance, lambda: load_users(users_container, state, search_field, parent_instance)),
-                lambda user_id: show_delete_confirmation(user_id, parent_instance, lambda: load_users(users_container, state, search_field, parent_instance))
+    if not update_pagination_only:
+        # Clear loading and add users
+        users_container.clear_widgets()
+        
+        if users:
+            for user in users:
+                card = create_user_card(
+                    user,
+                    lambda user_id, u=user: show_user_details(user_id, parent_instance),
+                    lambda user_id, current_status, u=user: show_toggle_status_confirmation(user_id, current_status, parent_instance, lambda: load_users(users_container, pagination_container, state, search_field, parent_instance)),
+                    lambda user_id, u=user: show_delete_confirmation(user_id, parent_instance, lambda: load_users(users_container, pagination_container, state, search_field, parent_instance))
+                )
+                users_container.add_widget(card)
+        else:
+            # No results
+            no_results = MDLabel(
+                text="No users found\nTry adjusting your search",
+                font_style='Body1',
+                theme_text_color='Secondary',
+                halign='center',
+                size_hint_y=None,
+                height=dp(100)
             )
-            users_container.add_widget(card)
-    else:
-        # No results
-        no_results = MDLabel(
-            text="No users found\nTry adjusting your search",
-            font_style='Body1',
-            theme_text_color='Secondary',
-            halign='center',
-            size_hint_y=None,
-            height=dp(100)
-        )
-        users_container.add_widget(no_results)
+            users_container.add_widget(no_results)
+    
+    # Update both pagination containers (top and bottom)
+    for pag_container in [state.get('pagination_top'), state.get('pagination_bottom')]:
+        if pag_container:
+            pag_container.clear_widgets()
+            if state['total_pages'] > 1:
+                pagination = create_pagination_controls(
+                    state['current_page'],
+                    state['total_pages'],
+                    lambda page: change_page(page, users_container, pagination_container, state, search_field, parent_instance)
+                )
+                pag_container.add_widget(pagination)
+
+
+def change_page(new_page, users_container, pagination_container, state, search_field, parent_instance):
+    """Change to a different page"""
+    state['current_page'] = new_page
+    load_users(users_container, pagination_container, state, search_field, parent_instance)
 
 
 def show_user_details(user_id, parent_instance):
@@ -464,7 +561,7 @@ def show_user_details(user_id, parent_instance):
     add_detail("Username", username, "account")
     add_detail("Email / User ID", email if email else f'User #{user_id}', "email")
     
-    # Status with color
+    # Add status
     status_text = "✅ Active" if is_active else "❌ Inactive"
     add_detail("Account Status", status_text, "shield-account")
     
@@ -507,7 +604,7 @@ def show_user_details(user_id, parent_instance):
 
 
 def show_toggle_status_confirmation(user_id, current_status, parent_instance, refresh_callback):
-    """Show confirmation dialog for activate/deactivate"""
+    """Show toggle status confirmation dialog"""
     
     # Get username
     conn = sqlite3.connect('library.db')
@@ -520,8 +617,8 @@ def show_toggle_status_confirmation(user_id, current_status, parent_instance, re
         return
     
     username = user[0]
-    action = "deactivate" if current_status else "activate"
     new_status = 0 if current_status else 1
+    action = "activate" if new_status else "deactivate"
     
     def confirm_toggle(dialog):
         try:
@@ -534,9 +631,10 @@ def show_toggle_status_confirmation(user_id, current_status, parent_instance, re
             dialog.dismiss()
             
             # Success message
+            status_text = "activated" if new_status else "deactivated"
             success_dialog = MDDialog(
                 title="Success",
-                text=f"User '{username}' has been {action}d successfully!",
+                text=f"User '{username}' {status_text} successfully!",
                 buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
             )
             success_dialog.open()
@@ -548,14 +646,15 @@ def show_toggle_status_confirmation(user_id, current_status, parent_instance, re
         except Exception as e:
             error_dialog = MDDialog(
                 title="Database Error",
-                text=f"Failed to {action} user: {str(e)}",
+                text=f"Failed to update user status: {str(e)}",
                 buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
             )
             error_dialog.open()
     
     # Confirmation dialog
+    action_text = f"{'Activate' if new_status else 'Deactivate'} this user"
     dialog = MDDialog(
-        title="Confirm Action",
+        title=f"Confirm {action_text.split()[0]}",
         text=f"Are you sure you want to {action} this user?\n\nUsername: {username}",
         buttons=[
             MDFlatButton(
@@ -563,8 +662,8 @@ def show_toggle_status_confirmation(user_id, current_status, parent_instance, re
                 on_release=lambda x: dialog.dismiss()
             ),
             MDRaisedButton(
-                text=action.upper(),
-                md_bg_color=(0.30, 0.69, 0.31, 1) if not current_status else (0.96, 0.50, 0.09, 1),
+                text=action_text.split()[0].upper(),
+                md_bg_color=(0.30, 0.69, 0.31, 1) if new_status else (0.96, 0.26, 0.21, 1),
                 on_release=lambda x: confirm_toggle(dialog)
             ),
         ],

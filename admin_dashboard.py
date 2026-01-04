@@ -206,7 +206,6 @@ class AdminDashboard(MDScreen):
             ("Dashboard", "view-dashboard", "dashboard"),
             ("Manage Books", "book-multiple", "manage_books"),
             ("Manage Users", "account-multiple", "manage_users"),
-            ("Manage Users", "account-multiple", "manage_users"),
             ("Admin Auth", "shield-account", "admin_authentication"),
             ("Settings", "cog", "system_settings")
         ]
@@ -435,82 +434,6 @@ class AdminDashboard(MDScreen):
     def load_manage_users(self):
         """Load manage users - card-based interface"""
         load_manage_users_content(self.content_scroll, self)
-        
-    def load_manage_users(self):
-        """Load manage users - full page"""
-        container = BoxLayout(orientation='vertical', spacing=dp(15), size_hint_y=None)
-        container.bind(minimum_height=container.setter('height'))
-        
-        # Page title
-        title = MDLabel(
-            text="👥 Manage Users",
-            font_style='H5',
-            theme_text_color='Primary',
-            size_hint_y=None,
-            height=dp(40)
-        )
-        container.add_widget(title)
-        
-        # Description
-        desc = MDLabel(
-            text="Monitor and control user accounts",
-            font_style='Caption',
-            theme_text_color='Secondary',
-            size_hint_y=None,
-            height=dp(30)
-        )
-        container.add_widget(desc)
-        
-        # Action cards
-        actions = [
-            ("View All Users", "👤", "See complete user list"),
-            ("User Details", "📋", "Check user information and activity"),
-            ("Edit Permissions", "🔐", "Modify user access rights"),
-            ("Delete Users", "❌", "Remove user accounts"),
-            ("Login History", "📊", "View user login records")
-        ]
-        
-        for action_title, icon, action_desc in actions:
-            card = BoxLayout(
-                orientation='horizontal',
-                size_hint_y=None,
-                height=dp(70),
-                padding=dp(10),
-                spacing=dp(10)
-            )
-            
-            with card.canvas.before:
-                Color(0.9, 0.95, 0.9, 1)
-                card.rect = Rectangle(size=card.size, pos=card.pos)
-            card.bind(size=lambda i, v: setattr(i.rect, 'size', i.size))
-            card.bind(pos=lambda i, v: setattr(i.rect, 'pos', i.pos))
-            
-            card.add_widget(MDLabel(
-                text=icon,
-                font_style='H4',
-                size_hint_x=0.2
-            ))
-            
-            text_box = BoxLayout(orientation='vertical', spacing=dp(2))
-            text_box.add_widget(MDLabel(
-                text=action_title,
-                font_style='Subtitle1',
-                theme_text_color='Primary',
-                size_hint_y=None,
-                height=dp(25)
-            ))
-            text_box.add_widget(MDLabel(
-                text=action_desc,
-                font_style='Caption',
-                theme_text_color='Secondary',
-                size_hint_y=None,
-                height=dp(20)
-            ))
-            card.add_widget(text_box)
-            
-            container.add_widget(card)
-        
-        self.content_scroll.add_widget(container)
         
     def load_admin_auth(self):
         """Load admin auth - full page"""
