@@ -24,6 +24,7 @@ from kivymd.uix.card import MDCard
 from database import Database
 from admin_modules.admin_dashboard import AdminDashboard
 from admin_modules.admin_auth import save_session
+from user_modules.user_dashboard import UserDashboard
 
 # Set window size for testing (comment out for mobile deployment)
 Window.size = (360, 640)
@@ -349,9 +350,21 @@ class LoginScreen(MDScreen):
         if not username or not password:
             self.show_error("Please enter both username and password")
             return
-            
-        if self.db.verify_user(username, password):
-            self.show_success_dialog(username, "User")
+        
+        # Verify user and get user ID
+        conn = self.db.connect()
+        cursor = conn.cursor()
+        password_hash = self.db.hash_password(password)
+        cursor.execute(
+            'SELECT id, username FROM users WHERE username = ? AND password_hash = ?',
+            (username, password_hash)
+        )
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            user_id, username = result
+            self.show_success_dialog(username, "User", user_id)
         else:
             self.show_error("Invalid username or password")
             
@@ -374,8 +387,20 @@ class LoginScreen(MDScreen):
         if len(password) < 6:
             self.show_error("Password must be at least 6 characters")
             return
+        
+        # Create user and get ID
+        conn = self.db.connect()
+        cursor = conn.cursor()
+        try:
+            password_hash = self.db.hash_password(password)
+            cursor.execute(
+                'INSERT INTO users (username, password_hash, email, phone) VALUES (?, ?, ?, ?)',
+                (username, password_hash, email or None, phone or None)
+            )
+            conn.commit()
+            user_id = cursor.lastrowid
+            conn.close()
             
-        if self.db.create_user(username, password, email or None, phone or None):
             # Auto-login after successful signup
             dialog = MDDialog(
                 title="Success!",
@@ -383,12 +408,13 @@ class LoginScreen(MDScreen):
                 buttons=[
                     MDFlatButton(
                         text="Continue",
-                        on_release=lambda x: (dialog.dismiss(), self.go_to_dashboard('User', username))
+                        on_release=lambda x: (dialog.dismiss(), self.go_to_dashboard('User', username, user_id))
                     )
                 ]
             )
             dialog.open()
-        else:
+        except Exception as e:
+            conn.close()
             self.show_error("Username already exists")
             
     def admin_login(self, instance):
@@ -411,7 +437,7 @@ class LoginScreen(MDScreen):
         """Display error message"""
         self.error_label.text = message
         
-    def show_success_dialog(self, username, user_type):
+    def show_success_dialog(self, username, user_type, user_id=None):
         """Show success dialog on successful login"""
         dialog = MDDialog(
             title=f"{user_type} Login Successful!",
@@ -419,13 +445,13 @@ class LoginScreen(MDScreen):
             buttons=[
                 MDFlatButton(
                     text="Continue",
-                    on_release=lambda x: (dialog.dismiss(), self.go_to_dashboard(user_type, username))
+                    on_release=lambda x: (dialog.dismiss(), self.go_to_dashboard(user_type, username, user_id))
                 )
             ]
         )
         dialog.open()
         
-    def go_to_dashboard(self, user_type, username):
+    def go_to_dashboard(self, user_type, username, user_id=None):
         """Navigate to appropriate dashboard"""
         print(f"✓ Navigating to {user_type} dashboard for {username}...")
         
@@ -433,9 +459,18 @@ class LoginScreen(MDScreen):
             self.manager.get_screen('admin_dashboard').set_admin_name(username)
             self.manager.current = 'admin_dashboard'
         else:
-            # Load user dashboard - coming soon
-            print(f"✓ User login not yet implemented. Please use admin account.")
-            self.error_label.text = "User dashboard coming soon. Please use admin account."
+            # Navigate to user dashboard
+            if 'user_dashboard' not in [screen.name for screen in self.manager.screens]:
+                user_dash = UserDashboard(user_id=user_id, username=username, name='user_dashboard')
+                self.manager.add_widget(user_dash)
+            else:
+                # Update existing dashboard
+                user_dash = self.manager.get_screen('user_dashboard')
+                user_dash.user_id = user_id
+                user_dash.username = username
+                user_dash.load_home()
+            
+            self.manager.current = 'user_dashboard'
 
 class LibraryApp(MDApp):
     """Main Application Class"""

@@ -445,51 +445,43 @@ def load_admin_auth_content(content_scroll, parent_instance):
 
 def create_change_password_dialog(parent_instance):
     """Create change password dialog"""
-    content = BoxLayout(
+    
+    # Main container
+    main_content = BoxLayout(
         orientation='vertical',
-        spacing=dp(12),
+        spacing=dp(10),
         padding=dp(15),
         size_hint_y=None,
-        height=dp(280)
+        height=dp(260)
     )
     
-    # Title
-    title_label = MDLabel(
-        text="Change Admin Password",
-        font_style='Subtitle1',
-        bold=True,
-        theme_text_color='Primary',
-        size_hint_y=None,
-        height=dp(30)
-    )
-    content.add_widget(title_label)
-    
+    # Password fields
     current_pass = MDTextField(
         hint_text="Current Password",
         password=True,
         mode="rectangle",
         size_hint_y=None,
-        height=dp(55)
+        height=dp(48)
     )
-    content.add_widget(current_pass)
+    main_content.add_widget(current_pass)
     
     new_pass = MDTextField(
         hint_text="New Password (min 6 characters)",
         password=True,
         mode="rectangle",
         size_hint_y=None,
-        height=dp(55)
+        height=dp(48)
     )
-    content.add_widget(new_pass)
+    main_content.add_widget(new_pass)
     
     confirm_pass = MDTextField(
         hint_text="Confirm New Password",
         password=True,
         mode="rectangle",
         size_hint_y=None,
-        height=dp(55)
+        height=dp(48)
     )
-    content.add_widget(confirm_pass)
+    main_content.add_widget(confirm_pass)
     
     error_label = MDLabel(
         text="",
@@ -500,32 +492,29 @@ def create_change_password_dialog(parent_instance):
         size_hint_y=None,
         height=dp(20)
     )
-    content.add_widget(error_label)
+    main_content.add_widget(error_label)
     
+    # Create dialog first (needed for dismiss in callbacks)
     dialog = MDDialog(
-        title="",
+        title="Change Password",
         type="custom",
-        content_cls=content,
+        content_cls=main_content,
         size_hint=(0.9, None),
-        height=dp(450),
-        buttons=[]
+        auto_dismiss=False
     )
     
     def change_password(instance):
         # Validation
         if not current_pass.text or not new_pass.text or not confirm_pass.text:
             error_label.text = "⚠️ All fields are required"
-            error_label.height = dp(25)
             return
         
         if new_pass.text != confirm_pass.text:
-            error_label.text = "⚠️ New passwords don't match"
-            error_label.height = dp(25)
+            error_label.text = "⚠️ Passwords don't match"
             return
         
         if len(new_pass.text) < 6:
-            error_label.text = "⚠️ Password must be at least 6 characters"
-            error_label.height = dp(25)
+            error_label.text = "⚠️ Min 6 characters required"
             return
         
         # Verify current password
@@ -535,8 +524,7 @@ def create_change_password_dialog(parent_instance):
         admin = cursor.fetchone()
         
         if not admin or not bcrypt.checkpw(current_pass.text.encode('utf-8'), admin[0]):
-            error_label.text = "⚠️ Current password is incorrect"
-            error_label.height = dp(25)
+            error_label.text = "⚠️ Current password incorrect"
             conn.close()
             return
         
@@ -550,8 +538,8 @@ def create_change_password_dialog(parent_instance):
         
         # Show success
         success_dialog = MDDialog(
-            title="Password Changed",
-            text="Your password has been changed successfully!",
+            title="Success",
+            text="Password changed successfully!",
             buttons=[
                 MDFlatButton(
                     text="OK",
@@ -561,19 +549,29 @@ def create_change_password_dialog(parent_instance):
         )
         success_dialog.open()
     
-    # Dialog buttons - prominent and clearly visible
-    dialog.buttons = [
-        MDFlatButton(
-            text="CANCEL",
-            theme_text_color='Custom',
-            text_color=(0.5, 0.5, 0.5, 1),
-            on_release=lambda x: dialog.dismiss()
-        ),
-        MDRaisedButton(
-            text="SAVE PASSWORD",
-            md_bg_color=(0.13, 0.59, 0.95, 1),
-            on_release=change_password
-        )
-    ]
+    # Add buttons directly to content
+    button_box = BoxLayout(
+        orientation='horizontal',
+        size_hint_y=None,
+        height=dp(45),
+        spacing=dp(10)
+    )
+    
+    cancel_btn = MDFlatButton(
+        text="CANCEL",
+        size_hint_x=0.5,
+        on_release=lambda x: dialog.dismiss()
+    )
+    button_box.add_widget(cancel_btn)
+    
+    save_btn = MDRaisedButton(
+        text="SAVE PASSWORD",
+        size_hint_x=0.5,
+        md_bg_color=(0.13, 0.59, 0.95, 1),
+        on_release=change_password
+    )
+    button_box.add_widget(save_btn)
+    
+    main_content.add_widget(button_box)
     
     return dialog
