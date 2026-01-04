@@ -56,7 +56,7 @@ class Database:
             )
         ''')
         
-        # Books table
+        # Books table - Enhanced with analytics fields
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS books (
                 id INTEGER PRIMARY KEY,
@@ -74,7 +74,90 @@ class Database:
                 book_type TEXT,
                 pdf_link TEXT,
                 thumbnail_link TEXT,
+                views INTEGER DEFAULT 0,
+                downloads INTEGER DEFAULT 0,
+                rating REAL DEFAULT 0,
+                rating_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Book Downloads Tracking
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS book_downloads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                user_id INTEGER,
+                download_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Book Views Tracking
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS book_views (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                user_id INTEGER,
+                view_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        '''
+        )
+        
+        # Reading Sessions
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reading_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                end_time TIMESTAMP,
+                duration_minutes INTEGER,
+                FOREIGN KEY (book_id) REFERENCES books(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # User Activity Log
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                activity_type TEXT NOT NULL,
+                activity_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # Book Reviews and Ratings
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS book_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                rating INTEGER CHECK(rating >= 1 AND rating <= 5),
+                review_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''')
+        
+        # System Statistics (for dashboard analytics)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                stat_date DATE DEFAULT (date('now')),
+                total_users INTEGER DEFAULT 0,
+                active_users INTEGER DEFAULT 0,
+                total_books INTEGER DEFAULT 0,
+                books_downloaded INTEGER DEFAULT 0,
+                new_registrations INTEGER DEFAULT 0,
+                UNIQUE(stat_date)
             )
         ''')
         
@@ -187,8 +270,9 @@ class Database:
                     INSERT OR REPLACE INTO books (
                         id, title, author, publisher, medium, standard,
                         issn, subject, syllabus, description, year_of_publication,
-                        content_type, book_type, pdf_link, thumbnail_link
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        content_type, book_type, pdf_link, thumbnail_link,
+                        views, downloads
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     book.get('id'),
                     book.get('title'),
@@ -204,7 +288,9 @@ class Database:
                     book.get('contentType'),
                     book.get('bookType'),
                     book.get('pdfLink'),
-                    book.get('thumbnailLink')
+                    book.get('thumbnailLink'),
+                    0,  # views (will be randomized later)
+                    0   # downloads (will be randomized later)
                 ))
                 imported += 1
             except Exception as e:
@@ -214,6 +300,122 @@ class Database:
         self.close()
         print(f"✓ Imported {imported} books from {json_file}")
         return imported
+    
+    def generate_sample_analytics_data(self):
+        """Generate sample data for testing analytics dashboard"""
+        import random
+        from datetime import timedelta
+        
+        self.connect()
+        
+        # Get all books
+        self.cursor.execute("SELECT id FROM books LIMIT 100")
+        book_ids = [row[0] for row in self.cursor.fetchall()]
+        
+        # Get all users
+        self.cursor.execute("SELECT id FROM users")
+        user_ids = [row[0] for row in self.cursor.fetchall()]
+        
+        if not user_ids:
+            # Create some sample users
+            for i in range(10):
+                username = f"user{i+1}"
+                password_hash = self.hash_password(f"password{i+1}")
+                try:
+                    self.cursor.execute(
+                        "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+                        (username, password_hash, f"{username}@library.com")
+                    )
+                except:
+                    pass
+            self.conn.commit()
+            self.cursor.execute("SELECT id FROM users")
+            user_ids = [row[0] for row in self.cursor.fetchall()]
+        
+        # Update books with random views and downloads
+        for book_id in book_ids:
+            views = random.randint(50, 500)
+            downloads = random.randint(10, min(views // 2, 200))
+            rating = round(random.uniform(3.5, 5.0), 1)
+            rating_count = random.randint(5, 100)
+            
+            self.cursor.execute('''
+                UPDATE books 
+                SET views = ?, downloads = ?, rating = ?, rating_count = ?
+                WHERE id = ?
+            ''', (views, downloads, rating, rating_count, book_id))
+        
+        # Generate book downloads for last 30 days
+        for _ in range(200):
+            if user_ids and book_ids:
+                user_id = random.choice(user_ids) if random.random() > 0.2 else None
+                book_id = random.choice(book_ids)
+                days_ago = random.randint(0, 30)
+                download_date = datetime.now() - timedelta(days=days_ago)
+                
+                try:
+                    self.cursor.execute('''
+                        INSERT INTO book_downloads (book_id, user_id, download_date)
+                        VALUES (?, ?, ?)
+                    ''', (book_id, user_id, download_date))
+                except:
+                    pass
+        
+        # Generate reading sessions
+        for _ in range(300):
+            if user_ids and book_ids:
+                book_id = random.choice(book_ids)
+                user_id = random.choice(user_ids)
+                days_ago = random.randint(0, 30)
+                start_time = datetime.now() - timedelta(days=days_ago, hours=random.randint(0, 12))
+                duration = random.randint(5, 180)  # 5 to 180 minutes
+                end_time = start_time + timedelta(minutes=duration)
+                
+                try:
+                    self.cursor.execute('''
+                        INSERT INTO reading_sessions (book_id, user_id, start_time, end_time, duration_minutes)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (book_id, user_id, start_time, end_time, duration))
+                except:
+                    pass
+        
+        # Generate book views for analytics
+        for _ in range(500):
+            if user_ids and book_ids:
+                book_id = random.choice(book_ids)
+                user_id = random.choice(user_ids) if random.random() > 0.3 else None
+                days_ago = random.randint(0, 30)
+                view_date = datetime.now() - timedelta(days=days_ago)
+                
+                try:
+                    self.cursor.execute('''
+                        INSERT INTO book_views (book_id, user_id, view_date)
+                        VALUES (?, ?, ?)
+                    ''', (book_id, user_id, view_date))
+                except:
+                    pass
+        
+        # Update system stats for last 7 days
+        for days_ago in range(7):
+            stat_date = datetime.now().date() - timedelta(days=days_ago)
+            total_users = len(user_ids) - random.randint(0, days_ago)
+            active_users = random.randint(total_users // 2, total_users)
+            total_books = len(book_ids)
+            books_downloaded = random.randint(20, 80)
+            new_registrations = random.randint(0, 5)
+            
+            try:
+                self.cursor.execute('''
+                    INSERT OR REPLACE INTO system_stats 
+                    (stat_date, total_users, active_users, total_books, books_downloaded, new_registrations)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (stat_date, total_users, active_users, total_books, books_downloaded, new_registrations))
+            except:
+                pass
+        
+        self.conn.commit()
+        self.close()
+        print("✓ Sample analytics data generated successfully")
 
 
 if __name__ == '__main__':
@@ -226,3 +428,6 @@ if __name__ == '__main__':
     
     # Import books from JSON
     db.import_books_from_json()
+    
+    # Generate sample analytics data
+    db.generate_sample_analytics_data()
