@@ -15,9 +15,11 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
-from dashboard_layout import load_dashboard_content
-from manage_books import load_manage_books_content
-from manage_users import load_manage_users_content
+from admin_modules.dashboard_layout import load_dashboard_content
+from admin_modules.manage_books import load_manage_books_content
+from admin_modules.manage_users import load_manage_users_content
+from admin_modules.admin_auth import load_admin_auth_content
+from admin_modules.settings import load_settings_content
 
 
 class AdminDashboard(MDScreen):
@@ -408,14 +410,10 @@ class AdminDashboard(MDScreen):
         Args:
             section (str): Section ID to load
         """
-        self.content_scroll.clear_widgets()
-        
         if section == 'dashboard':
             self.load_dashboard()
         elif section == 'manage_books':
             self.load_manage_books()
-        elif section == 'manage_users':
-            self.load_manage_users()
         elif section == 'manage_users':
             self.load_manage_users()
         elif section == 'admin_authentication':
@@ -434,158 +432,14 @@ class AdminDashboard(MDScreen):
     def load_manage_users(self):
         """Load manage users - card-based interface"""
         load_manage_users_content(self.content_scroll, self)
-        
+    
     def load_admin_auth(self):
-        """Load admin auth - full page"""
-        container = BoxLayout(orientation='vertical', spacing=dp(15), size_hint_y=None)
-        container.bind(minimum_height=container.setter('height'))
-        
-        # Page title
-        title = MDLabel(
-            text="🛡️ Admin Authentication",
-            font_style='H5',
-            theme_text_color='Primary',
-            size_hint_y=None,
-            height=dp(40)
-        )
-        container.add_widget(title)
-        
-        # Description
-        desc = MDLabel(
-            text="Manage admin accounts and security",
-            font_style='Caption',
-            theme_text_color='Secondary',
-            size_hint_y=None,
-            height=dp(30)
-        )
-        container.add_widget(desc)
-        
-        # Action cards
-        actions = [
-            ("Add Admin", "➕", "Create new admin account"),
-            ("Change Password", "🔑", "Update admin password"),
-            ("Admin Roles", "👑", "Assign admin permissions"),
-            ("Activity Log", "📝", "View admin actions history"),
-            ("Security Settings", "🔒", "Configure security options")
-        ]
-        
-        for action_title, icon, action_desc in actions:
-            card = BoxLayout(
-                orientation='horizontal',
-                size_hint_y=None,
-                height=dp(70),
-                padding=dp(10),
-                spacing=dp(10)
-            )
-            
-            with card.canvas.before:
-                Color(0.95, 0.9, 0.9, 1)
-                card.rect = Rectangle(size=card.size, pos=card.pos)
-            card.bind(size=lambda i, v: setattr(i.rect, 'size', i.size))
-            card.bind(pos=lambda i, v: setattr(i.rect, 'pos', i.pos))
-            
-            card.add_widget(MDLabel(
-                text=icon,
-                font_style='H4',
-                size_hint_x=0.2
-            ))
-            
-            text_box = BoxLayout(orientation='vertical', spacing=dp(2))
-            text_box.add_widget(MDLabel(
-                text=action_title,
-                font_style='Subtitle1',
-                theme_text_color='Primary',
-                size_hint_y=None,
-                height=dp(25)
-            ))
-            text_box.add_widget(MDLabel(
-                text=action_desc,
-                font_style='Caption',
-                theme_text_color='Secondary',
-                size_hint_y=None,
-                height=dp(20)
-            ))
-            card.add_widget(text_box)
-            
-            container.add_widget(card)
-        
-        self.content_scroll.add_widget(container)
-        
+        """Load Admin Auth content"""
+        load_admin_auth_content(self.content_scroll, self)
+    
     def load_settings(self):
-        """Load settings - full page"""
-        container = BoxLayout(orientation='vertical', spacing=dp(15), size_hint_y=None)
-        container.bind(minimum_height=container.setter('height'))
-        
-        # Page title
-        title = MDLabel(
-            text="⚙️ System Settings",
-            font_style='H5',
-            theme_text_color='Primary',
-            size_hint_y=None,
-            height=dp(40)
-        )
-        container.add_widget(title)
-        
-        # Description
-        desc = MDLabel(
-            text="Configure application preferences",
-            font_style='Caption',
-            theme_text_color='Secondary',
-            size_hint_y=None,
-            height=dp(30)
-        )
-        container.add_widget(desc)
-        
-        # Action cards
-        actions = [
-            ("Database Config", "💾", "Database connection settings"),
-            ("App Preferences", "🎨", "Customize app appearance"),
-            ("Security", "🔐", "Security and privacy options"),
-            ("Backup/Restore", "💿", "Data backup and recovery"),
-            ("About", "ℹ️", "App version and information")
-        ]
-        
-        for action_title, icon, action_desc in actions:
-            card = BoxLayout(
-                orientation='horizontal',
-                size_hint_y=None,
-                height=dp(70),
-                padding=dp(10),
-                spacing=dp(10)
-            )
-            
-            with card.canvas.before:
-                Color(0.9, 0.9, 0.95, 1)
-                card.rect = Rectangle(size=card.size, pos=card.pos)
-            card.bind(size=lambda i, v: setattr(i.rect, 'size', i.size))
-            card.bind(pos=lambda i, v: setattr(i.rect, 'pos', i.pos))
-            
-            card.add_widget(MDLabel(
-                text=icon,
-                font_style='H4',
-                size_hint_x=0.2
-            ))
-            
-            text_box = BoxLayout(orientation='vertical', spacing=dp(2))
-            text_box.add_widget(MDLabel(
-                text=action_title,
-                font_style='Subtitle1',
-                theme_text_color='Primary',
-                size_hint_y=None,
-                height=dp(25)
-            ))
-            text_box.add_widget(MDLabel(
-                text=action_desc,
-                font_style='Caption',
-                theme_text_color='Secondary',
-                size_hint_y=None,
-                height=dp(20)
-            ))
-            card.add_widget(text_box)
-            
-            container.add_widget(card)
-        
-        self.content_scroll.add_widget(container)
+        """Load Settings content"""
+        load_settings_content(self.content_scroll, self)
         
     def _update_header_rect(self, instance, value):
         self.header_rect.pos = instance.pos

@@ -76,7 +76,7 @@ def create_user_card(user_data, view_callback, toggle_status_callback, delete_ca
     status_box = BoxLayout(
         orientation='horizontal',
         size_hint_x=None,
-        width=dp(85),
+        width=dp(90),
         spacing=dp(4),
         padding=[dp(8), dp(4)]
     )
@@ -186,6 +186,8 @@ def load_manage_users_content(content_scroll, parent_instance):
         content_scroll: ScrollView to add content to
         parent_instance: AdminDashboard instance for callbacks
     """
+    # Clear existing content
+    content_scroll.clear_widgets()
     
     # Main container
     main_container = BoxLayout(

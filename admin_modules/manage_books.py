@@ -378,6 +378,8 @@ def load_manage_books_content(content_scroll, parent_instance):
         content_scroll: ScrollView to add content to
         parent_instance: AdminDashboard instance for callbacks
     """
+    # Clear existing content
+    content_scroll.clear_widgets()
     
     # Main container
     main_container = BoxLayout(

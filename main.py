@@ -22,7 +22,8 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.card import MDCard
 from database import Database
-from admin_dashboard import AdminDashboard
+from admin_modules.admin_dashboard import AdminDashboard
+from admin_modules.admin_auth import save_session
 
 # Set window size for testing (comment out for mobile deployment)
 Window.size = (360, 640)
@@ -400,6 +401,8 @@ class LoginScreen(MDScreen):
             return
             
         if self.db.verify_admin(username, password):
+            # Save session
+            save_session(1, username)
             self.show_success_dialog(username, "Admin")
         else:
             self.show_error("Invalid admin credentials")
