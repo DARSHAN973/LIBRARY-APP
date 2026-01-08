@@ -603,61 +603,467 @@ def load_home_tab(content_scroll, parent_instance):
     content_scroll.add_widget(main_container)
 
 
-def show_subject_books(parent_instance, subject):
-    """Show all books of a specific subject"""
-    from kivymd.uix.dialog import MDDialog
-    from kivymd.uix.list import MDList, TwoLineListItem
+def load_book_list_page(parent_instance, page_title, books):
+    """Dynamic page to display list of books with back button - Modern & Stylish"""
+    from kivy.uix.widget import Widget
+    from kivy.animation import Animation
     
+    # Clear current content
+    parent_instance.content_scroll.clear_widgets()
+    
+    # Main container
+    main_container = BoxLayout(
+        orientation='vertical',
+        size_hint_y=None,
+        spacing=dp(12),
+        padding=[dp(12), dp(5), dp(12), 0]
+    )
+    main_container.bind(minimum_height=main_container.setter('height'))
+    
+    # ==================== STYLISH HEADER ====================
+    # Header background card
+    header_card = FloatLayout(
+        size_hint_y=None,
+        height=dp(110)
+    )
+    
+    with header_card.canvas.before:
+        # Gradient-like header with modern blue
+        Color(0.13, 0.59, 0.95, 1)
+        header_card.bg = RoundedRectangle(
+            size=header_card.size,
+            pos=header_card.pos,
+            radius=[dp(16), dp(16), dp(16), dp(16)]
+        )
+    
+    header_card.bind(
+        size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+        pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+    )
+    
+    # Header content container
+    header_content = BoxLayout(
+        orientation='vertical',
+        padding=[dp(15), dp(12), dp(15), dp(12)],
+        spacing=dp(8)
+    )
+    
+    # Top row: Back button + Count badge
+    top_row = BoxLayout(
+        orientation='horizontal',
+        size_hint_y=None,
+        height=dp(40),
+        spacing=dp(10)
+    )
+    
+    # Back button with circular bg
+    back_container = FloatLayout(
+        size_hint=(None, 1),
+        width=dp(40)
+    )
+    
+    back_circle = BoxLayout(
+        size_hint=(None, None),
+        size=(dp(40), dp(40)),
+        pos_hint={'center_x': 0.5, 'center_y': 0.5}
+    )
+    
+    with back_circle.canvas.before:
+        Color(1, 1, 1, 0.2)
+        back_circle.bg = RoundedRectangle(
+            size=(dp(40), dp(40)),
+            pos=back_circle.pos,
+            radius=[dp(20)]
+        )
+    
+    back_circle.bind(
+        pos=lambda inst, val: setattr(inst.bg, 'pos', val)
+    )
+    
+    back_btn = MDIconButton(
+        icon='arrow-left',
+        theme_text_color='Custom',
+        text_color=(1, 1, 1, 1),
+        pos_hint={'center_x': 0.5, 'center_y': 0.5},
+        on_release=lambda x: load_home_tab(parent_instance.content_scroll, parent_instance)
+    )
+    back_circle.add_widget(back_btn)
+    back_container.add_widget(back_circle)
+    top_row.add_widget(back_container)
+    
+    # Spacer
+    top_row.add_widget(BoxLayout(size_hint_x=1))
+    
+    # Book count badge
+    count_badge = BoxLayout(
+        size_hint=(None, None),
+        size=(dp(60), dp(32)),
+        padding=[dp(10), 0, dp(10), 0]
+    )
+    
+    with count_badge.canvas.before:
+        Color(1, 1, 1, 0.25)
+        count_badge.bg = RoundedRectangle(
+            size=(dp(60), dp(32)),
+            pos=count_badge.pos,
+            radius=[dp(16)]
+        )
+    
+    count_badge.bind(
+        pos=lambda inst, val: setattr(inst.bg, 'pos', val),
+        size=lambda inst, val: setattr(inst.bg, 'size', val)
+    )
+    
+    count_badge.add_widget(MDLabel(
+        text=str(len(books)),
+        font_style='Subtitle2',
+        bold=True,
+        theme_text_color='Custom',
+        text_color=(1, 1, 1, 1),
+        halign='center'
+    ))
+    
+    top_row.add_widget(count_badge)
+    header_content.add_widget(top_row)
+    
+    # Title section with icon
+    title_row = BoxLayout(
+        orientation='horizontal',
+        size_hint_y=None,
+        height=dp(50),
+        spacing=dp(12)
+    )
+    
+    # Subject icon
+    title_row.add_widget(MDIcon(
+        icon='bookshelf',
+        theme_text_color='Custom',
+        text_color=(1, 1, 1, 0.9),
+        font_size='28sp',
+        size_hint=(None, None),
+        size=(dp(32), dp(32)),
+        pos_hint={'center_y': 0.5}
+    ))
+    
+    # Title with proper wrapping
+    title_text = page_title if len(page_title) <= 30 else page_title[:27] + '...'
+    title_box = BoxLayout(
+        orientation='vertical',
+        size_hint_x=1,
+        spacing=dp(2)
+    )
+    
+    title_box.add_widget(MDLabel(
+        text=title_text,
+        font_style='H6',
+        bold=True,
+        theme_text_color='Custom',
+        text_color=(1, 1, 1, 1),
+        size_hint_y=None,
+        height=dp(30)
+    ))
+    
+    title_box.add_widget(MDLabel(
+        text=f"{len(books)} book{'s' if len(books) != 1 else ''} available",
+        font_style='Caption',
+        theme_text_color='Custom',
+        text_color=(1, 1, 1, 0.8),
+        size_hint_y=None,
+        height=dp(18)
+    ))
+    
+    title_row.add_widget(title_box)
+    header_content.add_widget(title_row)
+    header_card.add_widget(header_content)
+    main_container.add_widget(header_card)
+    
+    # Small spacing after header
+    main_container.add_widget(BoxLayout(size_hint_y=None, height=dp(5)))
+    
+    # ==================== BOOKS LIST ====================
+    if not books:
+        # Empty state
+        empty_container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(250),
+            spacing=dp(15),
+            padding=dp(30)
+        )
+        
+        empty_container.add_widget(MDIcon(
+            icon='book-off-outline',
+            theme_text_color='Custom',
+            text_color=(0.6, 0.6, 0.6, 0.4),
+            font_size='72sp',
+            halign='center',
+            size_hint_y=None,
+            height=dp(90)
+        ))
+        
+        empty_container.add_widget(MDLabel(
+            text="No Books Found",
+            font_style='H6',
+            bold=True,
+            halign='center',
+            theme_text_color='Secondary',
+            size_hint_y=None,
+            height=dp(40)
+        ))
+        
+        empty_container.add_widget(MDLabel(
+            text="This category doesn't have any books yet.\\nCheck back later!",
+            font_style='Body2',
+            halign='center',
+            theme_text_color='Hint',
+            size_hint_y=None,
+            height=dp(50)
+        ))
+        
+        main_container.add_widget(empty_container)
+    else:
+        # Books list container
+        for idx, book_data in enumerate(books):
+            book_id = book_data[0]
+            title = book_data[1]
+            author = book_data[2] if len(book_data) > 2 else None
+            year = book_data[3] if len(book_data) > 3 else None
+            subject = book_data[4] if len(book_data) > 4 else None
+            
+            # Create modern book card
+            book_card = BoxLayout(
+                orientation='horizontal',
+                size_hint_y=None,
+                height=dp(110),
+                padding=[dp(12), dp(12), dp(12), dp(12)],
+                spacing=dp(12)
+            )
+            
+            # Card background with shadow
+            with book_card.canvas.before:
+                # Subtle shadow
+                Color(0, 0, 0, 0.05)
+                book_card.shadow = RoundedRectangle(
+                    size=book_card.size,
+                    pos=(book_card.x + dp(2), book_card.y - dp(2)),
+                    radius=[dp(14)]
+                )
+                # White background
+                Color(1, 1, 1, 1)
+                book_card.bg = RoundedRectangle(
+                    size=book_card.size,
+                    pos=book_card.pos,
+                    radius=[dp(14)]
+                )
+            
+            def update_card_bg(inst, val, shadow, bg):
+                shadow.size = inst.size
+                shadow.pos = (inst.x + dp(2), inst.y - dp(2))
+                bg.size = inst.size
+                bg.pos = inst.pos
+            
+            book_card.bind(
+                size=lambda inst, val, s=book_card.shadow, b=book_card.bg: update_card_bg(inst, val, s, b),
+                pos=lambda inst, val, s=book_card.shadow, b=book_card.bg: update_card_bg(inst, val, s, b)
+            )
+            
+            # Book icon - FIXED AND CENTERED
+            icon_container = BoxLayout(
+                orientation='vertical',
+                size_hint=(None, 1),
+                width=dp(70),
+                padding=[0, dp(10), 0, dp(10)]
+            )
+            
+            icon_bg_wrapper = BoxLayout(
+                size_hint_y=None,
+                height=dp(70)
+            )
+            
+            icon_bg = FloatLayout(
+                size_hint=(1, 1)
+            )
+            
+            with icon_bg.canvas.before:
+                Color(0.13, 0.59, 0.95, 0.12)
+                icon_bg.rect = RoundedRectangle(
+                    size=(dp(70), dp(70)),
+                    pos=icon_bg.pos,
+                    radius=[dp(14)]
+                )
+            
+            def update_icon_bg(inst, val):
+                inst.rect.size = inst.size
+                inst.rect.pos = inst.pos
+            
+            icon_bg.bind(size=update_icon_bg, pos=update_icon_bg)
+            
+            # Icon centered inside
+            icon_bg.add_widget(MDIcon(
+                icon='book-open-page-variant',
+                theme_text_color='Primary',
+                font_size='36sp',
+                pos_hint={'center_x': 0.5, 'center_y': 0.5}
+            ))
+            
+            icon_bg_wrapper.add_widget(icon_bg)
+            icon_container.add_widget(icon_bg_wrapper)
+            book_card.add_widget(icon_container)
+            
+            # Book details - PROPERLY ARRANGED
+            details_container = BoxLayout(
+                orientation='vertical',
+                spacing=dp(6),
+                size_hint_x=1,
+                padding=[0, dp(5), 0, dp(5)]
+            )
+            
+            # Title - NO OVERLAP
+            title_text = title if len(title) <= 40 else title[:37] + '...'
+            title_label = MDLabel(
+                text=title_text,
+                font_style='Subtitle1',
+                bold=True,
+                theme_text_color='Primary',
+                size_hint_y=None,
+                height=dp(24),
+                markup=False
+            )
+            details_container.add_widget(title_label)
+            
+            # Author row
+            if author:
+                author_text = author if len(author) <= 32 else author[:29] + '...'
+                author_row = BoxLayout(
+                    orientation='horizontal',
+                    size_hint_y=None,
+                    height=dp(20),
+                    spacing=dp(6)
+                )
+                author_row.add_widget(MDIcon(
+                    icon='account-outline',
+                    theme_text_color='Secondary',
+                    font_size='16sp',
+                    size_hint=(None, 1),
+                    width=dp(16)
+                ))
+                author_row.add_widget(MDLabel(
+                    text=author_text,
+                    font_style='Caption',
+                    theme_text_color='Secondary',
+                    size_hint_x=1,
+                    markup=False
+                ))
+                details_container.add_widget(author_row)
+            
+            # Meta info row (Year + Subject)
+            meta_row = BoxLayout(
+                orientation='horizontal',
+                size_hint_y=None,
+                height=dp(20),
+                spacing=dp(8)
+            )
+            
+            if year:
+                year_chip = BoxLayout(
+                    size_hint=(None, None),
+                    size=(dp(60), dp(20)),
+                    padding=[dp(6), 0, dp(6), 0]
+                )
+                
+                with year_chip.canvas.before:
+                    Color(0.13, 0.59, 0.95, 0.1)
+                    year_chip.chip_bg = RoundedRectangle(
+                        size=(dp(60), dp(20)),
+                        pos=year_chip.pos,
+                        radius=[dp(10)]
+                    )
+                
+                year_chip.bind(
+                    pos=lambda inst, val: setattr(inst.chip_bg, 'pos', val)
+                )
+                
+                year_chip.add_widget(MDLabel(
+                    text=str(year),
+                    font_style='Caption',
+                    theme_text_color='Primary',
+                    halign='center'
+                ))
+                meta_row.add_widget(year_chip)
+            
+            if subject:
+                subject_text = subject if len(subject) <= 18 else subject[:15] + '...'
+                meta_row.add_widget(MDLabel(
+                    text=f"• {subject_text}",
+                    font_style='Caption',
+                    theme_text_color='Hint',
+                    size_hint_x=1,
+                    markup=False
+                ))
+            
+            details_container.add_widget(meta_row)
+            book_card.add_widget(details_container)
+            
+            # Chevron - PROPERLY ALIGNED
+            chevron_container = BoxLayout(
+                orientation='vertical',
+                size_hint=(None, 1),
+                width=dp(30)
+            )
+            chevron_container.add_widget(MDIcon(
+                icon='chevron-right',
+                theme_text_color='Hint',
+                font_size='28sp',
+                pos_hint={'center_y': 0.5}
+            ))
+            book_card.add_widget(chevron_container)
+            
+            # Add click handler
+            def on_card_click(instance, touch, bid=book_id):
+                if instance.collide_point(*touch.pos):
+                    show_book_details(parent_instance, bid)
+            
+            book_card.bind(on_touch_down=on_card_click)
+            
+            # Animate card entrance
+            book_card.opacity = 0
+            anim = Animation(opacity=1, duration=0.3, t='out_cubic')
+            anim.start_delay = idx * 0.03  # Stagger effect
+            anim.start(book_card)
+            
+            main_container.add_widget(book_card)
+    
+    # Bottom spacer
+    bottom_spacer = BoxLayout(
+        size_hint_y=None,
+        height=dp(80)
+    )
+    main_container.add_widget(bottom_spacer)
+    
+    parent_instance.content_scroll.add_widget(main_container)
+
+
+def show_subject_books(parent_instance, subject):
+    """Show all books of a specific subject in a dedicated page"""
     # Get books for this subject
     conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, title, year_of_publication 
+        SELECT id, title, author, year_of_publication, subject 
         FROM books 
         WHERE subject = ? 
         ORDER BY title
-        LIMIT 50
     """, (subject,))
     books = cursor.fetchall()
     conn.close()
     
-    # Create list of books
-    books_list = MDList()
-    
-    for book_id, title, year in books:
-        item = TwoLineListItem(
-            text=title[:50] + ('...' if len(title) > 50 else ''),
-            secondary_text=f"Year: {year or 'N/A'}",
-            on_release=lambda x, bid=book_id: [dialog.dismiss(), show_book_details(parent_instance, bid)]
-        )
-        books_list.add_widget(item)
-    
-    if not books:
-        books_list.add_widget(TwoLineListItem(
-            text="No books found",
-            secondary_text="This subject has no books yet"
-        ))
-    
-    # Show dialog
-    dialog = MDDialog(
-        title=f"{subject}",
-        type="custom",
-        content_cls=books_list,
-        size_hint=(0.9, 0.8),
-        buttons=[
-            MDFlatButton(
-                text="CLOSE",
-                on_release=lambda x: dialog.dismiss()
-            )
-        ]
-    )
-    dialog.open()
+    # Load the dynamic book list page
+    load_book_list_page(parent_instance, subject, books)
 
 
 def show_book_details(parent_instance, book_id):
-    """Show book details and open PDF in app"""
+    """Show book details in a well-styled dialog"""
     from kivymd.uix.dialog import MDDialog
-    from kivymd.uix.card import MDCard
     
     # Get book details
     conn = sqlite3.connect('library.db')
@@ -675,64 +1081,144 @@ def show_book_details(parent_instance, book_id):
     
     title, author, year, subject, pdf_link = book
     
-    # Create content card
+    # Create content with proper text limits
     content = BoxLayout(
         orientation='vertical',
         size_hint_y=None,
-        height=dp(250),
+        height=dp(300),
         padding=dp(20),
-        spacing=dp(15)
+        spacing=dp(12)
     )
     
-    # Book icon and title
-    header = BoxLayout(
-        orientation='horizontal',
+    # Book icon with colored background
+    icon_box = FloatLayout(
         size_hint_y=None,
-        height=dp(60),
-        spacing=dp(15)
+        height=dp(80)
     )
     
-    header.add_widget(MDIcon(
+    icon_bg = BoxLayout(
+        size_hint=(None, None),
+        size=(dp(80), dp(80)),
+        pos_hint={'center_x': 0.5, 'center_y': 0.5}
+    )
+    
+    with icon_bg.canvas.before:
+        Color(0.13, 0.59, 0.95, 0.15)
+        icon_bg.bg = RoundedRectangle(
+            size=(dp(80), dp(80)),
+            pos=icon_bg.pos,
+            radius=[dp(40)]
+        )
+    
+    icon_bg.bind(
+        pos=lambda inst, val: setattr(inst.bg, 'pos', val)
+    )
+    
+    icon_bg.add_widget(MDIcon(
         icon='book-open-variant',
         theme_text_color='Primary',
         font_size='48sp',
-        size_hint=(None, None),
-        size=(dp(60), dp(60))
+        pos_hint={'center_x': 0.5, 'center_y': 0.5}
     ))
     
-    header.add_widget(MDLabel(
-        text=title[:40] + ('...' if len(title) > 40 else ''),
+    icon_box.add_widget(icon_bg)
+    content.add_widget(icon_box)
+    
+    # Title with text limit
+    title_text = title if len(title) <= 50 else title[:47] + '...'
+    title_label = MDLabel(
+        text=title_text,
         font_style='H6',
         bold=True,
-        theme_text_color='Primary'
-    ))
+        halign='center',
+        theme_text_color='Primary',
+        size_hint_y=None,
+        height=dp(60)
+    )
+    title_label.bind(size=lambda inst, val: setattr(inst, 'text_size', (inst.width, None)))
+    content.add_widget(title_label)
     
-    content.add_widget(header)
+    # Details container
+    details_box = BoxLayout(
+        orientation='vertical',
+        size_hint_y=None,
+        height=dp(90),
+        spacing=dp(8),
+        padding=[dp(10), 0, dp(10), 0]
+    )
     
-    # Details
+    # Author with text limit
     if author:
-        content.add_widget(MDLabel(
-            text=f"Author: {author}",
-            font_style='Body1',
+        author_text = author if len(author) <= 40 else author[:37] + '...'
+        author_row = BoxLayout(
+            orientation='horizontal',
             size_hint_y=None,
-            height=dp(30)
+            height=dp(25),
+            spacing=dp(10)
+        )
+        author_row.add_widget(MDIcon(
+            icon='account',
+            theme_text_color='Secondary',
+            font_size='20sp',
+            size_hint=(None, None),
+            size=(dp(24), dp(24))
         ))
+        author_row.add_widget(MDLabel(
+            text=author_text,
+            font_style='Body2',
+            theme_text_color='Secondary',
+            size_hint_x=1
+        ))
+        details_box.add_widget(author_row)
     
+    # Year
     if year:
-        content.add_widget(MDLabel(
-            text=f"Year: {year}",
-            font_style='Body1',
+        year_row = BoxLayout(
+            orientation='horizontal',
             size_hint_y=None,
-            height=dp(30)
+            height=dp(25),
+            spacing=dp(10)
+        )
+        year_row.add_widget(MDIcon(
+            icon='calendar',
+            theme_text_color='Secondary',
+            font_size='20sp',
+            size_hint=(None, None),
+            size=(dp(24), dp(24))
         ))
+        year_row.add_widget(MDLabel(
+            text=str(year),
+            font_style='Body2',
+            theme_text_color='Secondary',
+            size_hint_x=1
+        ))
+        details_box.add_widget(year_row)
     
+    # Subject with text limit
     if subject:
-        content.add_widget(MDLabel(
-            text=f"Subject: {subject}",
-            font_style='Body1',
+        subject_text = subject if len(subject) <= 35 else subject[:32] + '...'
+        subject_row = BoxLayout(
+            orientation='horizontal',
             size_hint_y=None,
-            height=dp(30)
+            height=dp(25),
+            spacing=dp(10)
+        )
+        subject_row.add_widget(MDIcon(
+            icon='tag',
+            theme_text_color='Secondary',
+            font_size='20sp',
+            size_hint=(None, None),
+            size=(dp(24), dp(24))
         ))
+        subject_row.add_widget(MDLabel(
+            text=subject_text,
+            font_style='Body2',
+            theme_text_color='Secondary',
+            size_hint_x=1
+        ))
+        details_box.add_widget(subject_row)
+    
+    content.add_widget(details_box)
     
     # Buttons
     buttons = []
@@ -758,9 +1244,9 @@ def show_book_details(parent_instance, book_id):
         )
     )
     
-    # Show dialog
+    # Show dialog with custom styling
     dialog = MDDialog(
-        title="Book Details",
+        title="",
         type="custom",
         content_cls=content,
         size_hint=(0.9, None),

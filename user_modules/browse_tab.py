@@ -1,6 +1,6 @@
 """
 Browse Tab - Subject-based Exploration
-Subject Grid → Book List
+Subject Grid → Dynamic Book List Page
 """
 
 from kivy.uix.boxlayout import BoxLayout
@@ -13,6 +13,8 @@ import sqlite3
 
 def load_browse_tab(content_scroll, parent_instance):
     """Load browse tab content"""
+    from user_modules.home_tab import load_book_list_page
+    
     content_scroll.clear_widgets()
     
     main_container = BoxLayout(
@@ -104,9 +106,10 @@ def load_browse_tab(content_scroll, parent_instance):
         )
         subject_card.add_widget(icon)
         
-        # Subject name
+        # Subject name with text limit
+        subject_text = subject if len(subject) <= 20 else subject[:17] + '...'
         subject_card.add_widget(MDLabel(
-            text=subject,
+            text=subject_text,
             font_style='Subtitle1',
             bold=True,
             halign='center',
@@ -125,7 +128,35 @@ def load_browse_tab(content_scroll, parent_instance):
             height=dp(18)
         ))
         
+        # Add click handler to open dynamic book list page
+        def on_subject_click(instance, touch, subj=subject):
+            if instance.collide_point(*touch.pos):
+                # Fetch books for this subject
+                conn = sqlite3.connect('library.db')
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, title, author, year_of_publication, subject 
+                    FROM books 
+                    WHERE subject = ? 
+                    ORDER BY title
+                """, (subj,))
+                books = cursor.fetchall()
+                conn.close()
+                
+                # Load dynamic book list page
+                load_book_list_page(parent_instance, subj, books)
+        
+        subject_card.bind(on_touch_down=on_subject_click)
+        
         subject_grid.add_widget(subject_card)
     
     main_container.add_widget(subject_grid)
+    
+    # Bottom spacer
+    bottom_spacer = BoxLayout(
+        size_hint_y=None,
+        height=dp(80)
+    )
+    main_container.add_widget(bottom_spacer)
+    
     content_scroll.add_widget(main_container)
