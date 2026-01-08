@@ -76,22 +76,9 @@ class Database:
                 pdf_link TEXT,
                 thumbnail_link TEXT,
                 views INTEGER DEFAULT 0,
-                downloads INTEGER DEFAULT 0,
                 rating REAL DEFAULT 0,
                 rating_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Book Downloads Tracking
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS book_downloads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                book_id INTEGER NOT NULL,
-                user_id INTEGER,
-                download_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (book_id) REFERENCES books(id),
-                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         ''')
         
@@ -181,7 +168,6 @@ class Database:
                 total_users INTEGER DEFAULT 0,
                 active_users INTEGER DEFAULT 0,
                 total_books INTEGER DEFAULT 0,
-                books_downloaded INTEGER DEFAULT 0,
                 new_registrations INTEGER DEFAULT 0,
                 UNIQUE(stat_date)
             )

@@ -1159,7 +1159,7 @@ def show_view_details(book_id, parent_instance):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT title, subject, author, publisher, year_of_publication, pdf_link,
-               views, downloads, rating, rating_count
+               views, rating, rating_count
         FROM books WHERE id = ?
     """, (book_id,))
     book = cursor.fetchone()
@@ -1168,7 +1168,7 @@ def show_view_details(book_id, parent_instance):
     if not book:
         return
     
-    title, subject, author, publisher, year, pdf_link, views, downloads, rating, rating_count = book
+    title, subject, author, publisher, year, pdf_link, views, rating, rating_count = book
     
     # Create details container
     details = BoxLayout(
@@ -1205,7 +1205,6 @@ def show_view_details(book_id, parent_instance):
     add_detail("Publisher", publisher)
     add_detail("Year", year)
     add_detail("Views", views or 0)
-    add_detail("Downloads", downloads or 0)
     add_detail("Rating", f"{rating:.1f} ⭐ ({rating_count} ratings)" if rating and rating_count else "No ratings")
     
     if pdf_link:

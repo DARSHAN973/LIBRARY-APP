@@ -481,12 +481,9 @@ def load_dashboard_content(content_scroll, navigate_callback):
         cursor.execute("SELECT COUNT(*) FROM books")
         total_books = cursor.fetchone()[0]
         
-        # Downloads today
-        cursor.execute("""
-            SELECT COUNT(*) FROM book_downloads 
-            WHERE date(download_date) = date('now')
-        """)
-        today_downloads = cursor.fetchone()[0]
+        # Total views
+        cursor.execute("SELECT SUM(views) FROM books")
+        total_views = cursor.fetchone()[0] or 0
         
         # Active users (logged in last 7 days)
         cursor.execute("""
@@ -498,19 +495,6 @@ def load_dashboard_content(content_scroll, navigate_callback):
         # Total users
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
-        
-        # Calculate trends (compare with yesterday)
-        cursor.execute("""
-            SELECT COUNT(*) FROM book_downloads 
-            WHERE date(download_date) = date('now', '-1 day')
-        """)
-        yesterday_downloads = cursor.fetchone()[0]
-        download_trend = "+0%"
-        if yesterday_downloads > 0:
-            trend_pct = int(((today_downloads - yesterday_downloads) / yesterday_downloads) * 100)
-            download_trend = f"+{trend_pct}%" if trend_pct > 0 else f"{trend_pct}%"
-        elif today_downloads > 0:
-            download_trend = "+100%"
         
         # KPI Grid
         kpi_grid = GridLayout(
@@ -567,9 +551,9 @@ def load_dashboard_content(content_scroll, navigate_callback):
             (0.13, 0.59, 0.95, 1), (0.25, 0.32, 0.71, 1)  # Blue gradient
         ))
         
-        # Card 2: Today's Downloads
+        # Card 2: Total Views
         kpi_grid.add_widget(create_gradient_card(
-            "download", today_downloads, "Downloaded Today", download_trend,
+            "eye", total_views, "Total Views", "+0%",
             (0.30, 0.69, 0.31, 1), (0.10, 0.49, 0.20, 1)  # Green gradient
         ))
         
@@ -588,9 +572,6 @@ def load_dashboard_content(content_scroll, navigate_callback):
         main_container.add_widget(kpi_grid)
         
         # ==================== QUICK STATS ====================
-        cursor.execute("SELECT SUM(downloads) FROM books")
-        total_downloads = cursor.fetchone()[0] or 0
-        
         cursor.execute("SELECT COUNT(*) FROM reading_sessions WHERE date(start_time) = date('now')")
         active_readers = cursor.fetchone()[0]
         
@@ -632,7 +613,7 @@ def load_dashboard_content(content_scroll, navigate_callback):
         quick_stats.bind(minimum_height=quick_stats.setter('height'))
         
         quick_stats.add_widget(create_mini_stat_card(
-            "Total Downloads", total_downloads, "download", (0.00, 0.74, 0.83, 1)
+            "Total Views", total_views, "eye", (0.00, 0.74, 0.83, 1)
         ))
         quick_stats.add_widget(create_mini_stat_card(
             "Reading Now", active_readers, "book-open-variant", (0.61, 0.15, 0.69, 1)
