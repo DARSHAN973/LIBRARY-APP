@@ -11,7 +11,7 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDRaisedButton, MDFlatButton
 import sqlite3
-import webbrowser
+from utils import open_url_safely
 
 
 def load_search_tab(content_scroll, parent_instance):
@@ -170,7 +170,7 @@ def load_search_tab(content_scroll, parent_instance):
             def open_browser(instance):
                 """Open browser with Google search"""
                 search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-                webbrowser.open(search_url)
+                open_url_safely(search_url)
             
             web_btn = MDRaisedButton(
                 text="OPEN IN BROWSER",

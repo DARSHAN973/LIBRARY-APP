@@ -15,6 +15,7 @@ from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.card import MDCard
 import sqlite3
+from utils import open_url_safely
 
 
 def load_home_tab(content_scroll, parent_instance): 
@@ -1279,7 +1280,7 @@ def show_book_details(parent_instance, book_id):
         disabled=not pdf_link
     )
     if pdf_link:
-        read_btn.bind(on_release=lambda x: [webbrowser.open(pdf_link), dialog.dismiss()])
+        read_btn.bind(on_release=lambda x: [open_url_safely(pdf_link), dialog.dismiss()])
     action_container.add_widget(read_btn)
     
     # Watchlist Button - ICON ONLY (always show)
@@ -1358,8 +1359,7 @@ def open_pdf_in_app(parent_instance, pdf_link, title):
     ))
     
     def open_in_browser(instance):
-        import webbrowser
-        webbrowser.open(pdf_link)
+        open_url_safely(pdf_link)
         dialog.dismiss()
     
     dialog = MDDialog(
