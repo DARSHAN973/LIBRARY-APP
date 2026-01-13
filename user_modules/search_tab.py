@@ -298,9 +298,10 @@ def load_search_tab(content_scroll, parent_instance):
             show_recent_searches()
             return
         
-        # Hide recent searches
+        # Hide recent searches and results
         recent_container.clear_widgets()
         recent_container.height = 0
+        results_container.clear_widgets()
         
         # Show loading
         suggestions_container.height = dp(60)
@@ -337,7 +338,7 @@ def load_search_tab(content_scroll, parent_instance):
             conn = sqlite3.connect('library.db')
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT DISTINCT title, author
+                SELECT DISTINCT id, title, author
                 FROM books 
                 WHERE title LIKE ? OR author LIKE ?
                 LIMIT 5
@@ -349,7 +350,7 @@ def load_search_tab(content_scroll, parent_instance):
                 # Use MDCard for each suggestion to avoid overlap
                 suggestions_container.height = len(suggestions) * dp(82)
                 
-                for title, author in suggestions:
+                for book_id, title, author in suggestions:
                     # Use MDCard for clean, separated items
                     suggestion_card = MDCard(
                         orientation='horizontal',
@@ -377,7 +378,8 @@ def load_search_tab(content_scroll, parent_instance):
                     text_box = BoxLayout(
                         orientation='vertical',
                         size_hint_x=1,
-                        spacing=dp(3)
+                        spacing=dp(3),
+                        pos_hint={'center_y': 0.5}
                     )
                     
                     title_label = MDLabel(
@@ -421,12 +423,18 @@ def load_search_tab(content_scroll, parent_instance):
                     )
                     suggestion_card.add_widget(arrow)
                     
-                    def on_suggestion_click(instance, touch, t=title):
+                    def on_suggestion_click(instance, touch, bid=book_id, t=title):
                         if instance.collide_point(*touch.pos):
-                            search_field.text = t
+                            # Hide suggestions
                             suggestions_container.height = 0
                             suggestions_container.clear_widgets()
-                            search_books(None)
+                            # Clear search results
+                            results_container.clear_widgets()
+                            # Save to recent searches
+                            save_recent_search(t)
+                            show_recent_searches()
+                            # Open book details directly
+                            show_book_details(parent_instance, bid)
                     
                     suggestion_card.bind(on_touch_down=on_suggestion_click)
                     suggestions_container.add_widget(suggestion_card)
@@ -456,15 +464,17 @@ def load_search_tab(content_scroll, parent_instance):
         if not query:
             return
         
-        # Hide suggestions
+        # Hide suggestions and recent searches
         suggestions_container.height = 0
         suggestions_container.clear_widgets()
+        recent_container.clear_widgets()
+        recent_container.height = 0
         
-        # Save to recent searches
-        save_recent_search(query)
-        show_recent_searches()
-        
+        # Clear results
         results_container.clear_widgets()
+        
+        # Save to recent searches (but don't show them)
+        save_recent_search(query)
         
         # Search in database
         conn = sqlite3.connect('library.db')
@@ -479,37 +489,6 @@ def load_search_tab(content_scroll, parent_instance):
         conn.close()
         
         if books:
-            # Results Header - Modern Design
-            results_header_box = BoxLayout(
-                orientation='horizontal',
-                size_hint_y=None,
-                height=dp(45),
-                spacing=dp(10),
-                padding=[dp(5), 0, 0, 0]
-            )
-            
-            results_icon = MDIcon(
-                icon='book-check',
-                theme_text_color='Custom',
-                text_color=(0.13, 0.59, 0.95, 1),
-                size_hint=(None, None),
-                size=(dp(28), dp(28)),
-                pos_hint={'center_y': 0.5}
-            )
-            results_header_box.add_widget(results_icon)
-            
-            results_header = MDLabel(
-                text=f"Found {len(books)} Result{'s' if len(books) > 1 else ''}",
-                font_style='H6',
-                bold=True,
-                theme_text_color='Custom',
-                text_color=(0.2, 0.2, 0.2, 1),
-                size_hint_x=1,
-                pos_hint={'center_y': 0.5}
-            )
-            results_header_box.add_widget(results_header)
-            results_container.add_widget(results_header_box)
-            
             # Show Results - Modern Cards
             for book_id, title, subject, author, year in books:
                 book_card = BoxLayout(
