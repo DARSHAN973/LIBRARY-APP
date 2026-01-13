@@ -121,20 +121,6 @@ class Database:
             )
         ''')
         
-        # Book Reviews and Ratings
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS book_reviews (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                book_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                rating INTEGER CHECK(rating >= 1 AND rating <= 5),
-                review_text TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (book_id) REFERENCES books(id),
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        ''')
-        
         # Watchlist - User's saved/favorite books
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS watchlist (

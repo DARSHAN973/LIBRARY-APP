@@ -10,13 +10,12 @@
 ### ✨ Major Transformation - COMPLETE REDESIGN!
 
 **1. 🗄️ Enhanced Database Architecture**
-Added 6 new tables for comprehensive analytics:
+Added analytics tables for comprehensive tracking:
 - ✅ `book_borrows` - Borrowing system with due dates & status tracking
 - ✅ `book_views` - View tracking for popularity analytics
 - ✅ `user_activity` - Activity logging for user behavior
-- ✅ `book_reviews` - Rating & review system (1-5 stars)
 - ✅ `system_stats` - Daily statistics for trend analysis
-- ✅ Enhanced `books` table - Added: views, borrows, ratings, copies
+- ✅ Enhanced `books` table - Added: views, ratings, copies
 
 **2. 🎨 Stunning Modern Dashboard Design**
 
@@ -538,11 +537,7 @@ NavigationLayout
    - Fields: id, user_id, activity_type, activity_data, created_at
    - Logs user actions
 
-4. **book_reviews** - Rating System
-   - Fields: id, book_id, user_id, rating (1-5), review_text, created_at
-   - Star ratings and reviews
-
-5. **system_stats** - Daily Statistics
+4. **system_stats** - Daily Statistics
    - Fields: id, stat_date, total_users, active_users, total_books, books_borrowed, new_registrations
    - Daily aggregated metrics
    - Unique constraint on stat_date
@@ -559,6 +554,7 @@ NavigationLayout
   - Generates 500 view records
   - Populates 7 days of system stats
   - Uses random ratings (3.5-5.0) and counts (5-100)
+
 
 **Updated Import Method:**
 - `import_books_from_json()` now includes new fields
