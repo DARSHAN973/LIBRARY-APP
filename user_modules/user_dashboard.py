@@ -48,11 +48,11 @@ class UserDashboard(MDScreen):
         top_bar.bind(size=update_top_bar_bg, pos=update_top_bar_bg)
         
         # Library icon
-        library_icon = MDIcon(
-            icon='library',
+        library_icon = MDLabel(
+            text="📚",
+            font_style='H6',
             theme_text_color='Custom',
             text_color=(1, 1, 1, 1),
-            font_size='28sp',
             size_hint=(None, None),
             size=(dp(40), dp(40)),
             pos_hint={'center_y': 0.5}

@@ -32,8 +32,9 @@ def load_profile_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    profile_icon = MDIcon(
-        icon='account-circle',
+    profile_icon = MDLabel(
+        text="👤",
+        font_style='H5',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),
@@ -100,8 +101,9 @@ def load_profile_tab(content_scroll, parent_instance):
         spacing=dp(8)
     )
     
-    user_avatar = MDIcon(
-        icon='account-circle',
+    user_avatar = MDLabel(
+        text="👤",
+        font_style='H6',
         theme_text_color='Custom',
         text_color=(1, 1, 1, 1),
         size_hint=(None, None),
@@ -147,8 +149,9 @@ def load_profile_tab(content_scroll, parent_instance):
             spacing=dp(6)
         )
         
-        email_icon = MDIcon(
-            icon='email',
+        email_icon = MDLabel(
+            text="📧",
+            font_style='Caption',
             theme_text_color='Custom',
             text_color=(1, 1, 1, 0.9),
             size_hint=(None, None),
@@ -176,8 +179,9 @@ def load_profile_tab(content_scroll, parent_instance):
             spacing=dp(6)
         )
         
-        phone_icon = MDIcon(
-            icon='phone',
+        phone_icon = MDLabel(
+            text="📱",
+            font_style='Caption',
             theme_text_color='Custom',
             text_color=(1, 1, 1, 0.9),
             size_hint=(None, None),
@@ -207,8 +211,9 @@ def load_profile_tab(content_scroll, parent_instance):
         padding=[dp(5), dp(10), 0, 0]
     )
     
-    stats_icon = MDIcon(
-        icon='chart-box',
+    stats_icon = MDLabel(
+        text="📊",
+        font_style='H5',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),
@@ -297,8 +302,9 @@ def load_profile_tab(content_scroll, parent_instance):
             spacing=dp(10)
         )
         
-        header_icon = MDIcon(
-            icon='history',
+        header_icon = MDLabel(
+            text="📚",
+            font_style='H5',
             theme_text_color='Custom',
             text_color=(0.13, 0.59, 0.95, 1),
             size_hint=(None, None),
@@ -485,8 +491,9 @@ def load_profile_tab(content_scroll, parent_instance):
             spacing=dp(10)
         )
         
-        header_icon = MDIcon(
-            icon='bookmark-multiple',
+        header_icon = MDLabel(
+            text="🔖",
+            font_style='H5',
             theme_text_color='Custom',
             text_color=(0.96, 0.61, 0.07, 1),
             size_hint=(None, None),
@@ -681,8 +688,9 @@ def load_profile_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    logout_icon = MDIcon(
-        icon='logout',
+    logout_icon = MDLabel(
+        text="🚪",
+        font_style='H6',
         theme_text_color='Custom',
         text_color=(0.96, 0.26, 0.21, 1),
         size_hint=(None, None),
@@ -778,9 +786,16 @@ def create_stat_card_modern(icon, title, count, color):
         ]
     )
     
-    # Icon
-    icon_widget = MDIcon(
-        icon=icon,
+    # Icon - map to emoji
+    icon_map = {
+        'book-check': '✓️',
+        'bookmark': '🔖'
+    }
+    icon_emoji = icon_map.get(icon, '📚')
+    
+    icon_widget = MDLabel(
+        text=icon_emoji,
+        font_style='H5',
         theme_text_color='Custom',
         text_color=color,
         size_hint=(None, None),
@@ -838,6 +853,12 @@ def create_action_card(icon, title, subtitle, button_text, icon_color, on_button
     )
     
     # Header with icon
+    icon_map = {
+        'history': '📚',
+        'bookmark-multiple': '🔖'
+    }
+    icon_emoji = icon_map.get(icon, '📚')
+    
     header_box = BoxLayout(
         orientation='horizontal',
         size_hint_y=None,
@@ -845,8 +866,9 @@ def create_action_card(icon, title, subtitle, button_text, icon_color, on_button
         spacing=dp(10)
     )
     
-    icon_widget = MDIcon(
-        icon=icon,
+    icon_widget = MDLabel(
+        text=icon_emoji,
+        font_style='H6',
         theme_text_color='Custom',
         text_color=icon_color,
         size_hint=(None, None),

@@ -12,13 +12,13 @@ from kivy.uix.button import Button
 from kivy.uix.image import Image
 from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
-from kivy.graphics import Color, Rectangle
+from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.label import MDLabel
+from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.card import MDCard
 from database import Database
@@ -66,59 +66,92 @@ class LoginScreen(MDScreen):
         self.main_layout.clear_widgets()
         
         # Spacer
-        self.main_layout.add_widget(Label(size_hint_y=None, height=dp(30)))
+        self.main_layout.add_widget(Label(size_hint_y=None, height=dp(20)))
         
-        # Logo/Title section
-        title_box = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(100), spacing=dp(5))
+        # Logo/Title section - Modern Design
+        title_box = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(140), spacing=dp(8))
         
-        icon_label = MDLabel(
-            text="[LIBRARY]",
+        # Icon container with background
+        icon_container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(70),
+            padding=dp(10)
+        )
+        
+        icon_label = MDIcon(
+            icon='book-open-variant',
+            theme_text_color='Custom',
+            text_color=(0.13, 0.59, 0.95, 1),
+            size_hint=(None, None),
+            size=(dp(60), dp(60)),
+            pos_hint={'center_x': 0.5}
+        )
+        icon_container.add_widget(icon_label)
+        title_box.add_widget(icon_container)
+        
+        # App name with modern styling
+        app_name = MDLabel(
+            text="📚 Digital Library",
             font_style='H4',
             halign='center',
-            size_hint_y=None,
-            height=dp(50),
-            bold=True
-        )
-        title_box.add_widget(icon_label)
-        
-        title = MDLabel(
-            text="Mobile Book Collection",
-            font_style='Caption',
-            halign='center',
-            theme_text_color='Secondary',
+            bold=True,
+            theme_text_color='Custom',
+            text_color=(0.1, 0.1, 0.1, 1),
             size_hint_y=None,
             height=dp(40)
         )
-        title_box.add_widget(title)
+        title_box.add_widget(app_name)
+        
+        # Subtitle
+        subtitle = MDLabel(
+            text="Your Knowledge Gateway",
+            font_style='Body2',
+            halign='center',
+            theme_text_color='Custom',
+            text_color=(0.5, 0.5, 0.5, 1),
+            size_hint_y=None,
+            height=dp(25)
+        )
+        title_box.add_widget(subtitle)
         
         self.main_layout.add_widget(title_box)
         
         self.main_layout.add_widget(Label(size_hint_y=None, height=dp(10)))
         
-        # Mode selection buttons
-        mode_box = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(45), spacing=dp(5))
+        # Mode selection buttons - Modern tabs
+        mode_box = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50), spacing=dp(8))
         
-        self.user_login_btn = MDRectangleFlatButton(
+        self.user_login_btn = MDRaisedButton(
             text="User Login",
-            size_hint=(0.33, 1),
-            md_bg_color=(0.2, 0.6, 1, 1) if self.current_mode == 'user_login' else (1, 1, 1, 1),
-            text_color=(1, 1, 1, 1) if self.current_mode == 'user_login' else (0.2, 0.6, 1, 1)
+            size_hint=(0.33, None),
+            height=dp(50),
+            md_bg_color=(0.13, 0.59, 0.95, 1) if self.current_mode == 'user_login' else (0.95, 0.95, 0.95, 1),
+            theme_text_color='Custom',
+            text_color=(1, 1, 1, 1) if self.current_mode == 'user_login' else (0.3, 0.3, 0.3, 1),
+            elevation=3 if self.current_mode == 'user_login' else 0
         )
         self.user_login_btn.bind(on_press=lambda x: self.switch_mode('user_login'))
         
-        self.user_signup_btn = MDRectangleFlatButton(
+        self.user_signup_btn = MDRaisedButton(
             text="Sign Up",
-            size_hint=(0.33, 1),
-            md_bg_color=(0.2, 0.6, 1, 1) if self.current_mode == 'user_signup' else (1, 1, 1, 1),
-            text_color=(1, 1, 1, 1) if self.current_mode == 'user_signup' else (0.2, 0.6, 1, 1)
+            size_hint=(0.33, None),
+            height=dp(50),
+            md_bg_color=(0.13, 0.59, 0.95, 1) if self.current_mode == 'user_signup' else (0.95, 0.95, 0.95, 1),
+            theme_text_color='Custom',
+            text_color=(1, 1, 1, 1) if self.current_mode == 'user_signup' else (0.3, 0.3, 0.3, 1),
+            elevation=3 if self.current_mode == 'user_signup' else 0
         )
         self.user_signup_btn.bind(on_press=lambda x: self.switch_mode('user_signup'))
         
-        self.admin_login_btn = MDRectangleFlatButton(
+        self.admin_login_btn = MDRaisedButton(
             text="Admin",
-            size_hint=(0.34, 1),
-            md_bg_color=(0.8, 0.3, 0.3, 1) if self.current_mode == 'admin_login' else (1, 1, 1, 1),
-            text_color=(1, 1, 1, 1) if self.current_mode == 'admin_login' else (0.8, 0.3, 0.3, 1)
+            size_hint=(0.34, None),
+            height=dp(50),
+            md_bg_color=(0.96, 0.26, 0.21, 1) if self.current_mode == 'admin_login' else (0.95, 0.95, 0.95, 1),
+            theme_text_color='Custom',
+            text_color=(1, 1, 1, 1) if self.current_mode == 'admin_login' else (0.3, 0.3, 0.3, 1),
+            elevation=3 if self.current_mode == 'admin_login' else 0
         )
         self.admin_login_btn.bind(on_press=lambda x: self.switch_mode('admin_login'))
         
@@ -128,7 +161,7 @@ class LoginScreen(MDScreen):
         
         self.main_layout.add_widget(mode_box)
         
-        self.main_layout.add_widget(Label(size_hint_y=None, height=dp(15)))
+        self.main_layout.add_widget(Label(size_hint_y=None, height=dp(20)))
         
         # Form container - auto height
         self.form_container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(12))
@@ -155,43 +188,66 @@ class LoginScreen(MDScreen):
         """Build user login form"""
         self.form_container.clear_widgets()
         
+        # Form card container
+        form_card = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            padding=dp(20),
+            spacing=dp(15)
+        )
+        form_card.bind(minimum_height=form_card.setter('height'))
+        
+        with form_card.canvas.before:
+            Color(1, 1, 1, 1)
+            form_card.bg = RoundedRectangle(
+                size=form_card.size,
+                pos=form_card.pos,
+                radius=[dp(16)]
+            )
+        
+        form_card.bind(
+            size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+            pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+        )
+        
         subtitle = MDLabel(
-            text="User Login",
-            font_style='Subtitle1',
+            text="Welcome Back! 👋",
+            font_style='H6',
             halign='center',
-            theme_text_color='Primary',
+            bold=True,
+            theme_text_color='Custom',
+            text_color=(0.1, 0.1, 0.1, 1),
             size_hint_y=None,
             height=dp(35)
         )
-        self.form_container.add_widget(subtitle)
+        form_card.add_widget(subtitle)
         
         self.username_field = MDTextField(
-            hint_text="Username",
-            icon_left="account",
+            hint_text="👤 Username",
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.username_field)
+        form_card.add_widget(self.username_field)
         
         self.password_field = MDTextField(
-            hint_text="Password",
-            icon_left="lock",
+            hint_text="🔒 Password",
             password=True,
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.password_field)
+        form_card.add_widget(self.password_field)
         
         login_btn = MDRaisedButton(
             text="LOGIN",
             size_hint=(1, None),
-            height=dp(48),
-            md_bg_color=(0.2, 0.6, 1, 1)
+            height=dp(52),
+            md_bg_color=(0.13, 0.59, 0.95, 1),
+            elevation=3
         )
         login_btn.bind(on_press=self.user_login)
-        self.form_container.add_widget(login_btn)
+        form_card.add_widget(login_btn)
         
         self.error_label = MDLabel(
             text="",
@@ -200,77 +256,99 @@ class LoginScreen(MDScreen):
             size_hint_y=None,
             height=dp(30)
         )
-        self.form_container.add_widget(self.error_label)
+        form_card.add_widget(self.error_label)
+        
+        self.form_container.add_widget(form_card)
         
     def build_user_signup_form(self):
         """Build user signup form"""
         self.form_container.clear_widgets()
         
+        # Form card container
+        form_card = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            padding=dp(20),
+            spacing=dp(15)
+        )
+        form_card.bind(minimum_height=form_card.setter('height'))
+        
+        with form_card.canvas.before:
+            Color(1, 1, 1, 1)
+            form_card.bg = RoundedRectangle(
+                size=form_card.size,
+                pos=form_card.pos,
+                radius=[dp(16)]
+            )
+        
+        form_card.bind(
+            size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+            pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+        )
+        
         subtitle = MDLabel(
-            text="Create New Account",
-            font_style='Subtitle1',
+            text="Create Your Account 🎉",
+            font_style='H6',
             halign='center',
-            theme_text_color='Primary',
+            bold=True,
+            theme_text_color='Custom',
+            text_color=(0.1, 0.1, 0.1, 1),
             size_hint_y=None,
             height=dp(35)
         )
-        self.form_container.add_widget(subtitle)
+        form_card.add_widget(subtitle)
         
         self.signup_username_field = MDTextField(
-            hint_text="Username",
-            icon_left="account",
+            hint_text="👤 Username",
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.signup_username_field)
+        form_card.add_widget(self.signup_username_field)
         
         self.signup_email_field = MDTextField(
-            hint_text="Email (optional)",
-            icon_left="email",
+            hint_text="📧 Email (optional)",
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.signup_email_field)
+        form_card.add_widget(self.signup_email_field)
         
         self.signup_phone_field = MDTextField(
-            hint_text="Phone (optional)",
-            icon_left="phone",
+            hint_text="📱 Phone (optional)",
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.signup_phone_field)
+        form_card.add_widget(self.signup_phone_field)
         
         self.signup_password_field = MDTextField(
-            hint_text="Password",
-            icon_left="lock",
+            hint_text="🔒 Password",
             password=True,
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.signup_password_field)
+        form_card.add_widget(self.signup_password_field)
         
         self.signup_confirm_password_field = MDTextField(
-            hint_text="Confirm Password",
-            icon_left="lock-check",
+            hint_text="🔐 Confirm Password",
             password=True,
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.signup_confirm_password_field)
+        form_card.add_widget(self.signup_confirm_password_field)
         
         signup_btn = MDRaisedButton(
             text="SIGN UP",
             size_hint=(1, None),
-            height=dp(48),
-            md_bg_color=(0.2, 0.6, 1, 1)
+            height=dp(52),
+            md_bg_color=(0.13, 0.59, 0.95, 1),
+            elevation=3
         )
         signup_btn.bind(on_press=self.user_signup)
-        self.form_container.add_widget(signup_btn)
+        form_card.add_widget(signup_btn)
         
         self.error_label = MDLabel(
             text="",
@@ -279,59 +357,85 @@ class LoginScreen(MDScreen):
             size_hint_y=None,
             height=dp(30)
         )
-        self.form_container.add_widget(self.error_label)
+        form_card.add_widget(self.error_label)
+        
+        self.form_container.add_widget(form_card)
         
     def build_admin_login_form(self):
         """Build admin login form"""
         self.form_container.clear_widgets()
         
+        # Form card container
+        form_card = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            padding=dp(20),
+            spacing=dp(15)
+        )
+        form_card.bind(minimum_height=form_card.setter('height'))
+        
+        with form_card.canvas.before:
+            Color(1, 1, 1, 1)
+            form_card.bg = RoundedRectangle(
+                size=form_card.size,
+                pos=form_card.pos,
+                radius=[dp(16)]
+            )
+        
+        form_card.bind(
+            size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+            pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+        )
+        
         subtitle = MDLabel(
-            text="Admin Login",
-            font_style='Subtitle1',
+            text="Admin Access 🔒",
+            font_style='H6',
             halign='center',
-            theme_text_color='Primary',
+            bold=True,
+            theme_text_color='Custom',
+            text_color=(0.1, 0.1, 0.1, 1),
             size_hint_y=None,
             height=dp(35)
         )
-        self.form_container.add_widget(subtitle)
+        form_card.add_widget(subtitle)
         
         info_label = MDLabel(
-            text="⚠️ Admin Access Only",
+            text="⚠️ Authorized Personnel Only",
             font_style='Caption',
             halign='center',
-            theme_text_color='Secondary',
+            theme_text_color='Custom',
+            text_color=(0.5, 0.5, 0.5, 1),
             size_hint_y=None,
             height=dp(25)
         )
-        self.form_container.add_widget(info_label)
+        form_card.add_widget(info_label)
         
         self.admin_username_field = MDTextField(
-            hint_text="Admin ID",
-            icon_left="shield-account",
+            hint_text="🛡️ Admin ID",
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.admin_username_field)
+        form_card.add_widget(self.admin_username_field)
         
         self.admin_password_field = MDTextField(
-            hint_text="Admin Password",
-            icon_left="lock",
+            hint_text="🔒 Admin Password",
             password=True,
             size_hint_y=None,
-            height=dp(48),
+            height=dp(56),
             mode="rectangle"
         )
-        self.form_container.add_widget(self.admin_password_field)
+        form_card.add_widget(self.admin_password_field)
         
         admin_login_btn = MDRaisedButton(
             text="ADMIN LOGIN",
             size_hint=(1, None),
-            height=dp(48),
-            md_bg_color=(0.8, 0.3, 0.3, 1)
+            height=dp(52),
+            md_bg_color=(0.96, 0.26, 0.21, 1),
+            elevation=3
         )
         admin_login_btn.bind(on_press=self.admin_login)
-        self.form_container.add_widget(admin_login_btn)
+        form_card.add_widget(admin_login_btn)
         
         self.error_label = MDLabel(
             text="",
@@ -340,7 +444,9 @@ class LoginScreen(MDScreen):
             size_hint_y=None,
             height=dp(30)
         )
-        self.form_container.add_widget(self.error_label)
+        form_card.add_widget(self.error_label)
+        
+        self.form_container.add_widget(form_card)
         
     def user_login(self, instance):
         """Handle user login"""
@@ -438,18 +544,107 @@ class LoginScreen(MDScreen):
         self.error_label.text = message
         
     def show_success_dialog(self, username, user_type, user_id=None):
-        """Show success dialog on successful login"""
-        dialog = MDDialog(
-            title=f"{user_type} Login Successful!",
-            text=f"Welcome back, {username}!",
-            buttons=[
-                MDFlatButton(
-                    text="Continue",
-                    on_release=lambda x: (dialog.dismiss(), self.go_to_dashboard(user_type, username, user_id))
-                )
-            ]
+        """Show attractive success modal on successful login"""
+        from kivy.uix.modalview import ModalView
+        
+        modal = ModalView(
+            size_hint=(0.85, None),
+            height=dp(320),
+            background='',
+            background_color=(0, 0, 0, 0),
+            overlay_color=(0, 0, 0, 0.6),
+            auto_dismiss=False
         )
-        dialog.open()
+        
+        modal_content = BoxLayout(
+            orientation='vertical',
+            padding=dp(25),
+            spacing=dp(20)
+        )
+        
+        with modal_content.canvas.before:
+            Color(1, 1, 1, 1)
+            modal_content.bg = RoundedRectangle(
+                size=modal_content.size,
+                pos=modal_content.pos,
+                radius=[dp(20)]
+            )
+        
+        modal_content.bind(
+            size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+            pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+        )
+        
+        # Success Icon
+        icon_box = BoxLayout(
+            size_hint_y=None,
+            height=dp(80)
+        )
+        icon_box.add_widget(BoxLayout())  # Spacer
+        
+        success_icon = MDLabel(
+            text="✓",
+            font_style='H1',
+            halign='center',
+            theme_text_color='Custom',
+            text_color=(0.3, 0.8, 0.3, 1),
+            size_hint=(None, None),
+            size=(dp(80), dp(80))
+        )
+        icon_box.add_widget(success_icon)
+        icon_box.add_widget(BoxLayout())  # Spacer
+        modal_content.add_widget(icon_box)
+        
+        # Success Title
+        title = MDLabel(
+            text="Login Successful!",
+            font_style='H5',
+            bold=True,
+            halign='center',
+            theme_text_color='Custom',
+            text_color=(0.13, 0.59, 0.95, 1),
+            size_hint_y=None,
+            height=dp(40)
+        )
+        modal_content.add_widget(title)
+        
+        # Welcome Message
+        welcome_msg = MDLabel(
+            text=f"Welcome back, {username}! 🎉",
+            font_style='Body1',
+            halign='center',
+            theme_text_color='Custom',
+            text_color=(0.3, 0.3, 0.3, 1),
+            size_hint_y=None,
+            height=dp(30)
+        )
+        modal_content.add_widget(welcome_msg)
+        
+        # Subtext
+        subtext = MDLabel(
+            text=f"Logging in as {user_type}...",
+            font_style='Caption',
+            halign='center',
+            theme_text_color='Custom',
+            text_color=(0.5, 0.5, 0.5, 1),
+            size_hint_y=None,
+            height=dp(25)
+        )
+        modal_content.add_widget(subtext)
+        
+        # Continue Button
+        continue_btn = MDRaisedButton(
+            text="CONTINUE",
+            size_hint=(1, None),
+            height=dp(52),
+            md_bg_color=(0.13, 0.59, 0.95, 1),
+            elevation=3,
+            on_release=lambda x: (modal.dismiss(), self.go_to_dashboard(user_type, username, user_id))
+        )
+        modal_content.add_widget(continue_btn)
+        
+        modal.add_widget(modal_content)
+        modal.open()
         
     def go_to_dashboard(self, user_type, username, user_id=None):
         """Navigate to appropriate dashboard"""

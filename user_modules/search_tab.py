@@ -82,8 +82,9 @@ def load_search_tab(content_scroll, parent_instance):
         spacing=dp(8)
     )
     
-    title_icon = MDIcon(
-        icon='book-search',
+    title_icon = MDLabel(
+        text="🔍",
+        font_style='H5',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),

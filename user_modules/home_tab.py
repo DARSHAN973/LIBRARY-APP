@@ -76,11 +76,11 @@ def load_home_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    greeting_icon = MDIcon(
-        icon='hand-wave-outline',
+    greeting_icon = MDLabel(
+        text="👋",
+        font_style='H5',
         theme_text_color='Custom',
         text_color=(1, 1, 1, 1),
-        font_size='32sp',
         size_hint=(None, None),
         size=(dp(40), dp(40))
     )

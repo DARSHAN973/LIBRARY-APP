@@ -35,11 +35,11 @@ def load_browse_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    header_icon = MDIcon(
-        icon='book-search',
+    header_icon = MDLabel(
+        text="🔎",
+        font_style='H5',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
-        font_size='32sp',
         size_hint=(None, None),
         size=(dp(40), dp(40)),
         pos_hint={'center_y': 0.5}
