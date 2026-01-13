@@ -432,13 +432,32 @@ def load_manage_books_content(content_scroll, parent_instance):
     main_container.add_widget(header_box)
     
     # ==================== SEARCH BAR ====================
+    search_box = BoxLayout(
+        orientation='vertical',
+        size_hint_y=None,
+        height=dp(105),
+        spacing=dp(8)
+    )
+    
     search_field = MDTextField(
         hint_text="Search books by title, subject, publisher...",
         mode="rectangle",
         size_hint_y=None,
         height=dp(50)
     )
-    main_container.add_widget(search_field)
+    search_box.add_widget(search_field)
+    
+    search_btn = MDRaisedButton(
+        text="SEARCH",
+        size_hint=(None, None),
+        size=(dp(120), dp(45)),
+        md_bg_color=(0.13, 0.59, 0.95, 1),
+        elevation=2,
+        pos_hint={'left': 1}
+    )
+    search_box.add_widget(search_btn)
+    
+    main_container.add_widget(search_box)
     
     # ==================== FILTERS ====================
     # Show loading message while getting filter data
@@ -668,6 +687,7 @@ def load_manage_books_content(content_scroll, parent_instance):
         load_books_page(books_container, pagination_bottom, state, search_field, parent_instance, update_pagination_only=True)
     
     search_field.bind(on_text_validate=on_search)
+    search_btn.bind(on_release=on_search)
     
     # Initial load
     content_scroll.add_widget(main_container)

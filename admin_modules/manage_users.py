@@ -248,21 +248,41 @@ def load_manage_users_content(content_scroll, parent_instance):
     main_container.add_widget(header_box)
     
     # ==================== SEARCH BAR ====================
+    search_box = BoxLayout(
+        orientation='vertical',
+        size_hint_y=None,
+        height=dp(105),
+        spacing=dp(8)
+    )
+    
     search_field = MDTextField(
         hint_text="Search users (name / email / ID)",
         mode="rectangle",
         size_hint_y=None,
         height=dp(50)
     )
+    search_box.add_widget(search_field)
     
-    # Wire up search with text change
-    def on_search_text(instance, value):
-        state['search_text'] = value
+    search_btn = MDRaisedButton(
+        text="SEARCH",
+        size_hint=(None, None),
+        size=(dp(120), dp(45)),
+        md_bg_color=(0.13, 0.59, 0.95, 1),
+        elevation=2,
+        pos_hint={'left': 1}
+    )
+    search_box.add_widget(search_btn)
+    
+    # Wire up search with button click
+    def on_search(instance):
+        state['search_text'] = search_field.text
         state['current_page'] = 1
         load_users(users_container, pagination_container, state, search_field, parent_instance)
     
-    search_field.bind(text=on_search_text)
-    main_container.add_widget(search_field)
+    search_field.bind(on_text_validate=on_search)
+    search_btn.bind(on_release=on_search)
+    
+    main_container.add_widget(search_box)
     
     # ==================== PAGINATION (TOP) ====================
     pagination_container = BoxLayout(
