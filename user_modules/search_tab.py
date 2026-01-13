@@ -74,16 +74,35 @@ def load_search_tab(content_scroll, parent_instance):
         spacing=dp(5)
     )
     
+    # Title with icon
+    title_box = BoxLayout(
+        orientation='horizontal',
+        size_hint_y=None,
+        height=dp(40),
+        spacing=dp(8)
+    )
+    
+    title_icon = MDIcon(
+        icon='book-search',
+        theme_text_color='Custom',
+        text_color=(0.13, 0.59, 0.95, 1),
+        size_hint=(None, None),
+        size=(dp(32), dp(32)),
+        pos_hint={'center_y': 0.5}
+    )
+    title_box.add_widget(title_icon)
+    
     title = MDLabel(
-        text="🔍 Discover Books",
+        text="Discover Books",
         font_style='H4',
         bold=True,
         theme_text_color='Custom',
         text_color=(0.1, 0.1, 0.1, 1),
-        size_hint_y=None,
-        height=dp(40)
+        size_hint_x=1,
+        pos_hint={'center_y': 0.5}
     )
-    header_section.add_widget(title)
+    title_box.add_widget(title)
+    header_section.add_widget(title_box)
     
     subtitle = MDLabel(
         text="Search our extensive library collection",
@@ -110,53 +129,8 @@ def load_search_tab(content_scroll, parent_instance):
         orientation='vertical',
         size_hint_y=None,
         height=dp(115),
-        padding=dp(15),
+        padding=dp(5),
         spacing=dp(10)
-    )
-    
-    with search_input_card.canvas.before:
-        # Shadow
-        Color(0.85, 0.85, 0.85, 0.3)
-        search_input_card.shadow = RoundedRectangle(
-            size=(search_input_card.width + dp(2), search_input_card.height + dp(2)),
-            pos=(search_input_card.x - dp(1), search_input_card.y - dp(3)),
-            radius=[dp(16)]
-        )
-        # Background
-        Color(0.98, 0.98, 1, 1)
-        search_input_card.bg = RoundedRectangle(
-            size=search_input_card.size,
-            pos=search_input_card.pos,
-            radius=[dp(16)]
-        )
-        # Border
-        Color(0.13, 0.59, 0.95, 0.4)
-        search_input_card.border = Line(
-            rounded_rectangle=(
-                search_input_card.x, search_input_card.y,
-                search_input_card.width, search_input_card.height,
-                dp(16)
-            ),
-            width=2
-        )
-    
-    search_input_card.bind(
-        size=lambda inst, val: [
-            setattr(inst.shadow, 'size', (inst.width + dp(2), inst.height + dp(2))),
-            setattr(inst.shadow, 'pos', (inst.x - dp(1), inst.y - dp(3))),
-            setattr(inst.bg, 'size', inst.size),
-            setattr(inst.bg, 'pos', inst.pos),
-            setattr(inst.border, 'rounded_rectangle', (
-                inst.x, inst.y, inst.width, inst.height, dp(16)
-            ))
-        ],
-        pos=lambda inst, val: [
-            setattr(inst.shadow, 'pos', (inst.x - dp(1), inst.y - dp(3))),
-            setattr(inst.bg, 'pos', inst.pos),
-            setattr(inst.border, 'rounded_rectangle', (
-                inst.x, inst.y, inst.width, inst.height, dp(16)
-            ))
-        ]
     )
     
     # Search Field (Clean, standalone)
@@ -407,24 +381,30 @@ def load_search_tab(content_scroll, parent_instance):
                     )
                     
                     title_label = MDLabel(
-                        text=title[:50] + ('...' if len(title) > 50 else ''),
+                        text=title,
                         theme_text_color='Custom',
                         text_color=(0.2, 0.2, 0.2, 1),
                         font_size='15sp',
                         bold=True,
                         size_hint_y=None,
-                        height=dp(22)
+                        height=dp(22),
+                        shorten=True,
+                        shorten_from='right',
+                        text_size=(None, None)
                     )
                     text_box.add_widget(title_label)
                     
                     if author:
                         author_label = MDLabel(
-                            text=f"by {author[:35]}" + ('...' if len(author or '') > 35 else ''),
+                            text=f"by {author}",
                             theme_text_color='Custom',
                             text_color=(0.5, 0.5, 0.5, 1),
                             font_size='13sp',
                             size_hint_y=None,
-                            height=dp(20)
+                            height=dp(20),
+                            shorten=True,
+                            shorten_from='right',
+                            text_size=(None, None)
                         )
                         text_box.add_widget(author_label)
                     
