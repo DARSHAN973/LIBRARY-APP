@@ -27,7 +27,7 @@ from admin_modules.admin_auth import save_session
 from user_modules.user_dashboard import UserDashboard
 
 # Set window size for testing (comment out for mobile deployment)
-Window.size = (360, 640)
+# Window.size = (360, 640)
 
 
 class LoginScreen(MDScreen):
