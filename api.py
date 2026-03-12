@@ -179,6 +179,7 @@ def health():
             "ok": True,
             "service": "library-backend",
             "db_mode": "postgres" if USE_POSTGRES else "sqlite",
+            "api_version": "2026-03-13-datetime-fix",
         }
     )
 
