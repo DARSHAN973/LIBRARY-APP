@@ -12,7 +12,7 @@ from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDRaisedButton, MDFlatButton
 from kivymd.uix.dialog import MDDialog
-import sqlite3
+from db_adapter import sqlite3
 import hashlib
 import json
 import os

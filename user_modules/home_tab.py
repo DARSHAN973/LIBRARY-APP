@@ -14,7 +14,7 @@ from kivy.animation import Animation
 from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.card import MDCard
-import sqlite3
+from db_adapter import sqlite3
 import threading
 from utils import open_url_safely, open_url_in_app_webview, run_with_loading
 

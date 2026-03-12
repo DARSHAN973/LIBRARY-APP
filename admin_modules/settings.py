@@ -12,7 +12,7 @@ from kivymd.uix.button import MDRaisedButton, MDFlatButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.menu import MDDropdownMenu
 from datetime import datetime
-import sqlite3
+from db_adapter import sqlite3
 import json
 import os
 import platform

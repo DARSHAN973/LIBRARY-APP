@@ -15,7 +15,7 @@ from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.spinner import MDSpinner
 from kivymd.uix.card import MDCard
-import sqlite3
+from db_adapter import sqlite3
 import json
 import os
 from utils import open_url_safely, run_with_loading

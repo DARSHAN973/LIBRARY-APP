@@ -9,7 +9,7 @@ from kivy.metrics import dp
 from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.dialog import MDDialog
-import sqlite3
+from db_adapter import sqlite3
 from utils import run_with_loading, LoadingOverlay
 from user_modules.home_tab import open_book_reader, mark_book_as_read
 

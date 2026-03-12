@@ -3,7 +3,7 @@ Database Module for Library Mobile App
 Handles SQLite database operations including admin authentication
 """
 
-import sqlite3
+from db_adapter import sqlite3
 import hashlib
 import json
 from datetime import datetime

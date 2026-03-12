@@ -23,7 +23,7 @@ from kivymd.uix.chip import MDChip
 from kivymd.uix.selectioncontrol import MDSwitch
 from kivymd.icon_definitions import md_icons
 from functools import partial
-import sqlite3
+from db_adapter import sqlite3
 from utils import run_with_loading
 
 

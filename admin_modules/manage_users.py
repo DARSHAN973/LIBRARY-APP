@@ -14,7 +14,7 @@ from kivymd.uix.button import MDRaisedButton, MDIconButton, MDFlatButton
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.spinner import MDSpinner
 from datetime import datetime
-import sqlite3
+from db_adapter import sqlite3
 from utils import run_with_loading
 
 

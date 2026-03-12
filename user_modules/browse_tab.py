@@ -10,7 +10,7 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.textfield import MDTextField
-import sqlite3
+from db_adapter import sqlite3
 
 
 def load_browse_tab(content_scroll, parent_instance):

@@ -1,384 +1,258 @@
-"""
-Flask REST API for Library Mobile App
-Runs on Railway and provides HTTP endpoints for mobile app authentication and book operations
+"""Backend API for Library App.
+
+This service supports two DB modes:
+- Local SQLite (default)
+- PostgreSQL via DATABASE_URL (Railway)
+
+Mobile app talks to this API through db_adapter.py.
 """
 
-from flask import Flask, request, jsonify
-from functools import wraps
-import sqlite3
-import json
-from datetime import datetime
-from database import Database
+import hashlib
 import os
+import re
+import sqlite3
+from urllib.parse import urlparse
+
+from flask import Flask, jsonify, request
+
+try:
+    import pg8000.dbapi as pgdb
+except Exception:  # pragma: no cover
+    pgdb = None
+
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'library-mobile-secret-key-2024'
+
+API_KEY = os.getenv("LIBRARY_API_KEY", "").strip()
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:DlOaWOSCsTSUQhdFdasYYJfyTBZOvThl@switchyard.proxy.rlwy.net:57523/railway",
+).strip()
+USE_POSTGRES = bool(DATABASE_URL)
 
 
-def get_db():
-    """Get database instance"""
-    return Database()
+def hash_password(password):
+    return hashlib.sha256((password or "").encode()).hexdigest()
 
 
-def token_required(f):
-    """Decorator to check for valid session token"""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = request.headers.get('X-Session-Token')
-        if not token:
-            return jsonify({'error': 'Missing session token'}), 401
-        
-        db = get_db()
-        try:
-            # Verify token exists in active sessions
-            cursor = db.conn.cursor()
-            cursor.execute('SELECT uid FROM users WHERE session_token = ? LIMIT 1', (token,))
-            user = cursor.fetchone()
-            if not user:
-                return jsonify({'error': 'Invalid session token'}), 401
-            request.uid = user[0]
-        except Exception as e:
-            return jsonify({'error': f'Error verifying token: {str(e)}'}), 500
-        finally:
-            db.conn.close()
-        
-        return f(*args, **kwargs)
-    return decorated
+def _parse_database_url(url):
+    parsed = urlparse(url)
+    return {
+        "user": parsed.username,
+        "password": parsed.password,
+        "host": parsed.hostname,
+        "port": parsed.port or 5432,
+        "database": (parsed.path or "").lstrip("/"),
+    }
 
 
-# ============= AUTH ENDPOINTS =============
+def _transform_sql_for_pg(query):
+    """Translate sqlite-flavored SQL to Postgres-safe SQL."""
+    q = query
 
-@app.route('/api/auth/login', methods=['POST'])
-def user_login():
-    """User login endpoint"""
+    # Placeholder style: ? -> %s
+    q = re.sub(r"\?", "%s", q)
+
+    # SQLite-specific helpers
+    q = re.sub(r"\bAUTOINCREMENT\b", "", q, flags=re.IGNORECASE)
+    q = re.sub(r"\bINTEGER PRIMARY KEY\b", "SERIAL PRIMARY KEY", q, flags=re.IGNORECASE)
+
+    # INSERT OR IGNORE / INSERT OR REPLACE
+    q = re.sub(
+        r"INSERT\s+OR\s+IGNORE\s+INTO",
+        "INSERT INTO",
+        q,
+        flags=re.IGNORECASE,
+    )
+    q = re.sub(
+        r"INSERT\s+OR\s+REPLACE\s+INTO",
+        "INSERT INTO",
+        q,
+        flags=re.IGNORECASE,
+    )
+
+    # date('now') -> CURRENT_DATE
+    q = re.sub(r"date\('now'\)", "CURRENT_DATE", q, flags=re.IGNORECASE)
+
+    # SQLite GLOB -> Postgres LIKE fallback
+    q = re.sub(r"\bGLOB\b", "LIKE", q, flags=re.IGNORECASE)
+
+    return q
+
+
+def _as_json_rows(rows):
+    # Convert tuples to plain lists for JSON serialization.
+    return [list(r) if isinstance(r, (tuple, list)) else r for r in rows]
+
+
+def _ensure_api_key():
+    if not API_KEY:
+        return None
+    client_key = request.headers.get("X-Api-Key", "")
+    if client_key != API_KEY:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+    return None
+
+
+def _sqlite_execute(query, params):
+    conn = sqlite3.connect("library.db")
+    cur = conn.cursor()
     try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
-        
-        if not email or not password:
-            return jsonify({'error': 'Missing email or password'}), 400
-        
-        db = get_db()
-        result = db.user_login(email, password)
-        db.conn.close()
-        
-        if result:
-            return jsonify({
-                'success': True,
-                'uid': result[0],
-                'name': result[1],
-                'session_token': result[2]
-            }), 200
-        else:
-            return jsonify({'error': 'Invalid credentials'}), 401
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        cur.execute(query, params)
+        is_read = (query or "").strip().lower().startswith(("select", "with", "pragma"))
+        rows = cur.fetchall() if is_read else []
+        conn.commit()
+        return {
+            "ok": True,
+            "rows": _as_json_rows(rows),
+            "rowcount": cur.rowcount,
+            "lastrowid": cur.lastrowid,
+        }
+    finally:
+        conn.close()
 
 
-@app.route('/api/auth/signup', methods=['POST'])
-def user_signup():
-    """User signup endpoint"""
+def _postgres_execute(query, params):
+    if pgdb is None:
+        return {"ok": False, "error": "pg8000 is not installed on server"}
+
+    cfg = _parse_database_url(DATABASE_URL)
+    if not cfg["database"]:
+        return {"ok": False, "error": "Invalid DATABASE_URL"}
+
+    transformed = _transform_sql_for_pg(query)
+    conn = pgdb.connect(
+        user=cfg["user"],
+        password=cfg["password"],
+        host=cfg["host"],
+        port=cfg["port"],
+        database=cfg["database"],
+    )
+    cur = conn.cursor()
     try:
-        data = request.get_json()
-        name = data.get('name')
-        email = data.get('email')
-        phone = data.get('phone')
-        password = data.get('password')
-        
-        if not all([name, email, phone, password]):
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        db = get_db()
-        result = db.user_signup(name, email, phone, password)
-        db.conn.close()
-        
-        if result:
-            return jsonify({
-                'success': True,
-                'uid': result[0],
-                'name': result[1],
-                'session_token': result[2]
-            }), 200
-        else:
-            return jsonify({'error': 'Email already exists'}), 409
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        cur.execute(transformed, tuple(params))
+        is_read = (query or "").strip().lower().startswith(("select", "with", "pragma"))
+        rows = cur.fetchall() if is_read else []
+        conn.commit()
+        return {
+            "ok": True,
+            "rows": _as_json_rows(rows),
+            "rowcount": cur.rowcount,
+            "lastrowid": None,
+        }
+    except Exception as exc:
+        conn.rollback()
+        return {"ok": False, "error": str(exc)}
+    finally:
+        conn.close()
 
 
-@app.route('/api/auth/admin-login', methods=['POST'])
-def admin_login():
-    """Admin login endpoint"""
-    try:
-        data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-        
-        if not username or not password:
-            return jsonify({'error': 'Missing username or password'}), 400
-        
-        db = get_db()
-        result = db.admin_login(username, password)
-        db.conn.close()
-        
-        if result:
-            return jsonify({
-                'success': True,
-                'aid': result[0],
-                'name': result[1],
-                'session_token': result[2]
-            }), 200
-        else:
-            return jsonify({'error': 'Invalid credentials'}), 401
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def run_sql(query, params):
+    if USE_POSTGRES:
+        return _postgres_execute(query, params)
+    return _sqlite_execute(query, params)
 
 
-@app.route('/api/auth/logout', methods=['POST'])
-@token_required
-def logout():
-    """Logout endpoint - clear session token"""
-    try:
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('UPDATE users SET session_token = NULL WHERE uid = ?', (request.uid,))
-        db.conn.commit()
-        db.conn.close()
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# ============= BOOK ENDPOINTS =============
-
-@app.route('/api/books', methods=['GET'])
-def get_books():
-    """Get all books with optional filters"""
-    try:
-        search = request.args.get('search', '')
-        subject = request.args.get('subject', '')
-        limit = int(request.args.get('limit', 50))
-        offset = int(request.args.get('offset', 0))
-        
-        db = get_db()
-        books = db.get_books(search=search, subject=subject, limit=limit, offset=offset)
-        db.conn.close()
-        
-        return jsonify({
-            'success': True,
-            'books': books,
-            'count': len(books)
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/books/<int:bid>', methods=['GET'])
-def get_book(bid):
-    """Get book details"""
-    try:
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('''
-            SELECT bid, title, author, subject, pdf_link 
-            FROM books WHERE bid = ?
-        ''', (bid,))
-        book = cursor.fetchone()
-        db.conn.close()
-        
-        if book:
-            return jsonify({
-                'success': True,
-                'book': {
-                    'bid': book[0],
-                    'title': book[1],
-                    'author': book[2],
-                    'subject': book[3],
-                    'pdf_link': book[4]
-                }
-            }), 200
-        else:
-            return jsonify({'error': 'Book not found'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# ============= PROFILE ENDPOINTS =============
-
-@app.route('/api/profile', methods=['GET'])
-@token_required
-def get_profile():
-    """Get user profile"""
-    try:
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('''
-            SELECT uid, name, email, phone FROM users WHERE uid = ?
-        ''', (request.uid,))
-        user = cursor.fetchone()
-        db.conn.close()
-        
-        if user:
-            return jsonify({
-                'success': True,
-                'profile': {
-                    'uid': user[0],
-                    'name': user[1],
-                    'email': user[2],
-                    'phone': user[3]
-                }
-            }), 200
-        else:
-            return jsonify({'error': 'User not found'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# ============= READING HISTORY ENDPOINTS =============
-
-@app.route('/api/reading-history', methods=['GET'])
-@token_required
-def get_reading_history():
-    """Get user's reading history"""
-    try:
-        db = get_db()
-        cursor = db.conn.cursor()
-        
-        # Get deduped reading history (group by book_id, show latest)
-        cursor.execute('''
-            SELECT b.bid, b.title, b.author, b.subject, b.pdf_link, 
-                   MAX(rh.opened_at) as last_opened
-            FROM reading_history rh
-            JOIN books b ON rh.bid = b.bid
-            WHERE rh.uid = ?
-            GROUP BY b.bid, b.title, b.author, b.subject, b.pdf_link
-            ORDER BY last_opened DESC
-        ''', (request.uid,))
-        
-        history = []
-        for row in cursor.fetchall():
-            history.append({
-                'bid': row[0],
-                'title': row[1],
-                'author': row[2],
-                'subject': row[3],
-                'pdf_link': row[4],
-                'last_opened': row[5]
-            })
-        
-        db.conn.close()
-        return jsonify({'success': True, 'history': history}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/reading-history', methods=['POST'])
-@token_required
-def add_reading_history():
-    """Add to reading history"""
-    try:
-        data = request.get_json()
-        bid = data.get('bid')
-        
-        if not bid:
-            return jsonify({'error': 'Missing book id'}), 400
-        
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('''
-            INSERT INTO reading_history (uid, bid, opened_at)
-            VALUES (?, ?, ?)
-        ''', (request.uid, bid, datetime.now().isoformat()))
-        db.conn.commit()
-        db.conn.close()
-        
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# ============= WATCHLIST ENDPOINTS =============
-
-@app.route('/api/watchlist', methods=['GET'])
-@token_required
-def get_watchlist():
-    """Get user's watchlist"""
-    try:
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('''
-            SELECT b.bid, b.title, b.author, b.subject, b.pdf_link
-            FROM watchlist w
-            JOIN books b ON w.bid = b.bid
-            WHERE w.uid = ?
-            ORDER BY w.added_at DESC
-        ''', (request.uid,))
-        
-        watchlist = []
-        for row in cursor.fetchall():
-            watchlist.append({
-                'bid': row[0],
-                'title': row[1],
-                'author': row[2],
-                'subject': row[3],
-                'pdf_link': row[4]
-            })
-        
-        db.conn.close()
-        return jsonify({'success': True, 'watchlist': watchlist}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/watchlist', methods=['POST'])
-@token_required
-def add_watchlist():
-    """Add to watchlist"""
-    try:
-        data = request.get_json()
-        bid = data.get('bid')
-        
-        if not bid:
-            return jsonify({'error': 'Missing book id'}), 400
-        
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('''
-            INSERT OR IGNORE INTO watchlist (uid, bid, added_at)
-            VALUES (?, ?, ?)
-        ''', (request.uid, bid, datetime.now().isoformat()))
-        db.conn.commit()
-        db.conn.close()
-        
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/watchlist/<int:bid>', methods=['DELETE'])
-@token_required
-def remove_watchlist(bid):
-    """Remove from watchlist"""
-    try:
-        db = get_db()
-        cursor = db.conn.cursor()
-        cursor.execute('DELETE FROM watchlist WHERE uid = ? AND bid = ?', (request.uid, bid))
-        db.conn.commit()
-        db.conn.close()
-        
-        return jsonify({'success': True}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# ============= HEALTH CHECK =============
-
-@app.route('/api/health', methods=['GET'])
+@app.get("/api/health")
 def health():
-    """Health check endpoint"""
-    return jsonify({'status': 'ok', 'service': 'Library API'}), 200
+    return jsonify(
+        {
+            "ok": True,
+            "service": "library-backend",
+            "db_mode": "postgres" if USE_POSTGRES else "sqlite",
+        }
+    )
 
 
-if __name__ == '__main__':
-    # For local testing
-    app.run(debug=True, host='0.0.0.0', port=5000)
+@app.post("/api/db/query")
+def db_query():
+    auth = _ensure_api_key()
+    if auth:
+        return auth
+
+    payload = request.get_json(silent=True) or {}
+    query = payload.get("query", "")
+    params = payload.get("params", [])
+
+    if not query:
+        return jsonify({"ok": False, "error": "Missing SQL query"}), 400
+
+    result = run_sql(query, params)
+    code = 200 if result.get("ok") else 400
+    return jsonify(result), code
+
+
+@app.post("/api/db/execute")
+def db_execute():
+    # Same handler as /query, split path keeps adapter logic simple.
+    return db_query()
+
+
+@app.post("/api/auth/user-login")
+def user_login():
+    payload = request.get_json(silent=True) or {}
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Username and password required"}), 400
+
+    result = run_sql(
+        "SELECT id, username FROM users WHERE username = ? AND password_hash = ?",
+        [username, hash_password(password)],
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+
+    rows = result.get("rows", [])
+    if not rows:
+        return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+    uid, uname = rows[0]
+    return jsonify({"ok": True, "user": {"id": uid, "username": uname}})
+
+
+@app.post("/api/auth/user-signup")
+def user_signup():
+    payload = request.get_json(silent=True) or {}
+    username = (payload.get("username") or "").strip()
+    email = (payload.get("email") or "").strip() or None
+    phone = (payload.get("phone") or "").strip() or None
+    password = payload.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Username and password required"}), 400
+
+    result = run_sql(
+        "INSERT INTO users (username, password_hash, email, phone) VALUES (?, ?, ?, ?)",
+        [username, hash_password(password), email, phone],
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+
+    return jsonify({"ok": True, "user_id": result.get("lastrowid")})
+
+
+@app.post("/api/auth/admin-login")
+def admin_login():
+    payload = request.get_json(silent=True) or {}
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Username and password required"}), 400
+
+    result = run_sql(
+        "SELECT id, username FROM admins WHERE username = ? AND password_hash = ?",
+        [username, hash_password(password)],
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+
+    rows = result.get("rows", [])
+    if not rows:
+        return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+    aid, aname = rows[0]
+    return jsonify({"ok": True, "admin": {"id": aid, "username": aname}})
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=False)
