@@ -11,6 +11,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.image import Image
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.floatlayout import FloatLayout
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp
@@ -187,6 +188,36 @@ class LoginScreen(MDScreen):
         """Toggle password visibility for a text field."""
         field.password = not field.password
         button.icon = 'eye-off' if field.password else 'eye'
+
+    def _build_password_input(self, hint_text):
+        """Create a password input with an eye button visually inside the field."""
+        container = FloatLayout(
+            size_hint_y=None,
+            height=dp(56)
+        )
+
+        field = MDTextField(
+            hint_text=hint_text,
+            password=True,
+            mode="rectangle",
+            size_hint=(1, None),
+            height=dp(56),
+            pos_hint={'x': 0, 'center_y': 0.5}
+        )
+
+        eye_btn = MDIconButton(
+            icon='eye-off',
+            theme_text_color='Custom',
+            text_color=(0.4, 0.4, 0.4, 1),
+            size_hint=(None, None),
+            size=(dp(40), dp(40)),
+            pos_hint={'right': 0.98, 'center_y': 0.5}
+        )
+        eye_btn.bind(on_release=lambda _x: self._toggle_password_visibility(field, eye_btn))
+
+        container.add_widget(field)
+        container.add_widget(eye_btn)
+        return container, field
         
     def switch_mode(self, mode):
         """Switch between user login, signup, and admin login"""
@@ -239,32 +270,8 @@ class LoginScreen(MDScreen):
         )
         form_card.add_widget(self.username_field)
         
-        password_row = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(56),
-            spacing=dp(8)
-        )
-        self.password_field = MDTextField(
-            hint_text="Password",
-            password=True,
-            size_hint_x=1,
-            mode="rectangle"
-        )
-        login_eye_btn = MDIconButton(
-            icon='eye-off',
-            theme_text_color='Custom',
-            text_color=(0.4, 0.4, 0.4, 1),
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={'center_y': 0.5}
-        )
-        login_eye_btn.bind(
-            on_release=lambda _x: self._toggle_password_visibility(self.password_field, login_eye_btn)
-        )
-        password_row.add_widget(self.password_field)
-        password_row.add_widget(login_eye_btn)
-        form_card.add_widget(password_row)
+        password_input, self.password_field = self._build_password_input("Password")
+        form_card.add_widget(password_input)
         
         login_btn = MDRaisedButton(
             text="LOGIN",
@@ -349,59 +356,11 @@ class LoginScreen(MDScreen):
         )
         form_card.add_widget(self.signup_phone_field)
         
-        signup_password_row = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(56),
-            spacing=dp(8)
-        )
-        self.signup_password_field = MDTextField(
-            hint_text="Password",
-            password=True,
-            size_hint_x=1,
-            mode="rectangle"
-        )
-        signup_eye_btn = MDIconButton(
-            icon='eye-off',
-            theme_text_color='Custom',
-            text_color=(0.4, 0.4, 0.4, 1),
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={'center_y': 0.5}
-        )
-        signup_eye_btn.bind(
-            on_release=lambda _x: self._toggle_password_visibility(self.signup_password_field, signup_eye_btn)
-        )
-        signup_password_row.add_widget(self.signup_password_field)
-        signup_password_row.add_widget(signup_eye_btn)
-        form_card.add_widget(signup_password_row)
+        signup_password_input, self.signup_password_field = self._build_password_input("Password")
+        form_card.add_widget(signup_password_input)
         
-        confirm_password_row = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(56),
-            spacing=dp(8)
-        )
-        self.signup_confirm_password_field = MDTextField(
-            hint_text="Confirm Password",
-            password=True,
-            size_hint_x=1,
-            mode="rectangle"
-        )
-        confirm_eye_btn = MDIconButton(
-            icon='eye-off',
-            theme_text_color='Custom',
-            text_color=(0.4, 0.4, 0.4, 1),
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={'center_y': 0.5}
-        )
-        confirm_eye_btn.bind(
-            on_release=lambda _x: self._toggle_password_visibility(self.signup_confirm_password_field, confirm_eye_btn)
-        )
-        confirm_password_row.add_widget(self.signup_confirm_password_field)
-        confirm_password_row.add_widget(confirm_eye_btn)
-        form_card.add_widget(confirm_password_row)
+        confirm_password_input, self.signup_confirm_password_field = self._build_password_input("Confirm Password")
+        form_card.add_widget(confirm_password_input)
         
         signup_btn = MDRaisedButton(
             text="SIGN UP",
@@ -481,32 +440,8 @@ class LoginScreen(MDScreen):
         )
         form_card.add_widget(self.admin_username_field)
         
-        admin_password_row = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(56),
-            spacing=dp(8)
-        )
-        self.admin_password_field = MDTextField(
-            hint_text="Admin Password",
-            password=True,
-            size_hint_x=1,
-            mode="rectangle"
-        )
-        admin_eye_btn = MDIconButton(
-            icon='eye-off',
-            theme_text_color='Custom',
-            text_color=(0.4, 0.4, 0.4, 1),
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={'center_y': 0.5}
-        )
-        admin_eye_btn.bind(
-            on_release=lambda _x: self._toggle_password_visibility(self.admin_password_field, admin_eye_btn)
-        )
-        admin_password_row.add_widget(self.admin_password_field)
-        admin_password_row.add_widget(admin_eye_btn)
-        form_card.add_widget(admin_password_row)
+        admin_password_input, self.admin_password_field = self._build_password_input("Admin Password")
+        form_card.add_widget(admin_password_input)
         
         admin_login_btn = MDRaisedButton(
             text="ADMIN LOGIN",
@@ -649,8 +584,8 @@ class LoginScreen(MDScreen):
             else:
                 self.show_error("Invalid admin credentials")
 
-        def on_error(_exc):
-            self.show_error("Admin login failed. Please try again")
+        def on_error(exc):
+            self.show_error(f"Admin login failed: {exc}")
 
         run_with_loading(
             self,

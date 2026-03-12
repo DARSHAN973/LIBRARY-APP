@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover
 
 app = Flask(__name__)
 
-API_KEY = os.getenv("LIBRARY_API_KEY", "").strip()
+API_KEY = os.getenv("LIBRARY_API_KEY", "collage-project-4217").strip()
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:DlOaWOSCsTSUQhdFdasYYJfyTBZOvThl@switchyard.proxy.rlwy.net:57523/railway",
@@ -67,6 +67,25 @@ def _transform_sql_for_pg(query):
     q = re.sub(
         r"INSERT\s+OR\s+REPLACE\s+INTO",
         "INSERT INTO",
+        q,
+        flags=re.IGNORECASE,
+    )
+
+    # datetime('now') -> CURRENT_TIMESTAMP
+    q = re.sub(r"datetime\('now'\)", "CURRENT_TIMESTAMP", q, flags=re.IGNORECASE)
+
+    # datetime('now', '-N days') -> CURRENT_TIMESTAMP - INTERVAL 'N days'
+    q = re.sub(
+        r"datetime\('now'\s*,\s*'-(\d+)\s+days'\)",
+        r"(CURRENT_TIMESTAMP - INTERVAL '\1 days')",
+        q,
+        flags=re.IGNORECASE,
+    )
+
+    # date('now', '-N days') -> CURRENT_DATE - INTERVAL 'N days'
+    q = re.sub(
+        r"date\('now'\s*,\s*'-(\d+)\s+days'\)",
+        r"(CURRENT_DATE - INTERVAL '\1 days')",
         q,
         flags=re.IGNORECASE,
     )

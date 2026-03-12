@@ -50,8 +50,8 @@ class PDFViewer:
     def open_pdf_android(pdf_url):
         """Open PDF in Android native viewer"""
         try:
-            from kivy.core.window import Window
-            from jnius import autoclass, cast
+            jnius_mod = __import__('jnius', fromlist=['autoclass'])
+            autoclass = jnius_mod.autoclass
             
             # Get the PDF file
             local_path = PDFViewer.get_cached_pdf_path(pdf_url)
@@ -92,7 +92,8 @@ class PDFViewer:
     def open_pdf_webview(pdf_url, parent_widget=None):
         """Open PDF in WebView (fallback for desktop testing)"""
         try:
-            from kivy.uix.webview import WebView
+            webview_mod = __import__('kivy.uix.webview', fromlist=['WebView'])
+            WebView = webview_mod.WebView
             
             local_path = PDFViewer.get_cached_pdf_path(pdf_url)
             

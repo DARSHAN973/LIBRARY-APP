@@ -8,6 +8,7 @@ import os
 import sqlite3 as _sqlite3
 from urllib.parse import urljoin
 import json
+from datetime import datetime, date
 
 import requests
 
@@ -26,7 +27,10 @@ class RemoteCursor:
         self.rowcount = -1
 
     def execute(self, query, params=()):
-        payload = {"query": query, "params": list(params) if params else []}
+        payload = {
+            "query": query,
+            "params": [self._to_json_value(p) for p in (list(params) if params else [])],
+        }
         endpoint = "/api/db/query" if self._is_read_query(query) else "/api/db/execute"
         url = urljoin(f"{self.base_url}/", endpoint.lstrip("/"))
         headers = {"Content-Type": "application/json"}
@@ -81,6 +85,12 @@ class RemoteCursor:
     def _is_read_query(query):
         q = (query or "").strip().lower()
         return q.startswith("select") or q.startswith("with") or q.startswith("pragma")
+
+    @staticmethod
+    def _to_json_value(value):
+        if isinstance(value, (datetime, date)):
+            return value.isoformat(sep=" ") if isinstance(value, datetime) else value.isoformat()
+        return value
 
 
 class RemoteConnection:

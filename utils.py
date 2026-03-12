@@ -146,10 +146,10 @@ def run_with_loading(
             Clock.schedule_once(done, 0)
         except Exception as exc:
 
-            def fail(_dt):
+            def fail(_dt, err=exc):
                 loader.stop()
                 if on_error:
-                    on_error(exc)
+                    on_error(err)
 
             Clock.schedule_once(fail, 0)
 

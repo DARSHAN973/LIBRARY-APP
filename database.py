@@ -212,8 +212,8 @@ class Database:
         password_hash = self.hash_password(password)
         
         self.cursor.execute(
-            'SELECT id, username FROM admins WHERE username = ? AND password_hash = ?',
-            (username, password_hash)
+            'SELECT id, username FROM admins WHERE (username = ? OR email = ?) AND password_hash = ?',
+            (username, username, password_hash)
         )
         result = self.cursor.fetchone()
         

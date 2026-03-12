@@ -17,6 +17,22 @@ from datetime import datetime, timedelta
 import database as db_module
 
 
+def format_metric_value(value):
+    """Format large numbers for compact mobile card display."""
+    try:
+        n = int(value or 0)
+    except (TypeError, ValueError):
+        return str(value)
+
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f}B"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
+
+
 def create_gradient_card(icon_name, value, subtitle, trend, color_start, color_end):
     """
     Create a stunning gradient KPI card with trend indicator
@@ -32,7 +48,7 @@ def create_gradient_card(icon_name, value, subtitle, trend, color_start, color_e
     card_container = BoxLayout(
         orientation='vertical',
         size_hint=(0.48, None),
-        height=dp(120),
+        height=dp(128),
         padding=dp(2)
     )
     
@@ -93,16 +109,22 @@ def create_gradient_card(icon_name, value, subtitle, trend, color_start, color_e
     top_row.add_widget(trend_label)
     card.add_widget(top_row)
     
+    display_value = format_metric_value(value)
+    value_size = '24sp' if len(display_value) > 5 else '28sp'
+
     # Main value
     card.add_widget(MDLabel(
-        text=str(value),
-        font_style='H3',
+        text=display_value,
+        font_size=value_size,
         theme_text_color='Custom',
         text_color=(1, 1, 1, 1),
         size_hint_y=None,
-        height=dp(45),
+        height=dp(40),
         halign='left',
-        bold=True
+        bold=True,
+        max_lines=1,
+        shorten=True,
+        shorten_from='right'
     ))
     
     # Subtitle
@@ -275,14 +297,20 @@ def create_mini_stat_card(title, value, icon_name, bg_color):
     
     # Text
     text_box = BoxLayout(orientation='vertical', size_hint_x=1, spacing=dp(2))
+    display_value = format_metric_value(value)
+    value_size = '20sp' if len(display_value) > 5 else '24sp'
+
     text_box.add_widget(MDLabel(
-        text=str(value),
-        font_style='H4',
+        text=display_value,
+        font_size=value_size,
         theme_text_color='Custom',
         text_color=(1, 1, 1, 1),
         bold=True,
         size_hint_y=None,
-        height=dp(32)
+        height=dp(30),
+        max_lines=1,
+        shorten=True,
+        shorten_from='right'
     ))
     text_box.add_widget(MDLabel(
         text=title,
@@ -501,7 +529,7 @@ def load_dashboard_content(content_scroll, navigate_callback):
             cols=2,
             spacing=dp(10),
             size_hint_y=None,
-            height=dp(250)
+            height=dp(270)
         )
         
         # Calculate total books trend (compare with last week)
@@ -572,8 +600,15 @@ def load_dashboard_content(content_scroll, navigate_callback):
         main_container.add_widget(kpi_grid)
         
         # ==================== QUICK STATS ====================
-        cursor.execute("SELECT COUNT(*) FROM reading_sessions WHERE date(start_time) = date('now')")
-        active_readers = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM (
+                SELECT user_id, book_id
+                FROM reading_history
+                GROUP BY user_id, book_id
+            ) AS read_pairs
+        """)
+        total_books_read = cursor.fetchone()[0] or 0
         
         cursor.execute("SELECT SUM(views) FROM books")
         total_views = cursor.fetchone()[0] or 0
@@ -616,10 +651,10 @@ def load_dashboard_content(content_scroll, navigate_callback):
             "Total Views", total_views, "eye", (0.00, 0.74, 0.83, 1)
         ))
         quick_stats.add_widget(create_mini_stat_card(
-            "Reading Now", active_readers, "book-open-variant", (0.61, 0.15, 0.69, 1)
+            "Total Books Read", total_books_read, "book-check", (0.61, 0.15, 0.69, 1)
         ))
         quick_stats.add_widget(create_mini_stat_card(
-            "Total Views", total_views, "eye", (0.96, 0.26, 0.21, 1)
+            "Total Books", total_books, "book-multiple", (0.96, 0.26, 0.21, 1)
         ))
         
         main_container.add_widget(quick_stats)
@@ -788,7 +823,7 @@ def load_dashboard_content(content_scroll, navigate_callback):
             icon="book-plus",
             size_hint_x=0.5,
             md_bg_color=(0.13, 0.59, 0.95, 1),
-            on_release=lambda x: navigate_callback("Manage Books")
+            on_release=lambda x: navigate_callback("manage_books", "Manage Books")
         )
         actions_grid.add_widget(btn_add_book)
         
@@ -797,7 +832,7 @@ def load_dashboard_content(content_scroll, navigate_callback):
             icon="account-group",
             size_hint_x=0.5,
             md_bg_color=(0.30, 0.69, 0.31, 1),
-            on_release=lambda x: navigate_callback("Manage Users")
+            on_release=lambda x: navigate_callback("manage_users", "Manage Users")
         )
         actions_grid.add_widget(btn_manage_users)
         

@@ -501,6 +501,82 @@ def load_profile_tab(content_scroll, parent_instance):
             return watchlist_books
 
         def on_success(watchlist_books):
+            def remove_from_watchlist(book_id, book_title, modal_ref):
+                """Remove selected book from watchlist and refresh modal content."""
+
+                def worker_remove():
+                    conn = sqlite3.connect('library.db')
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "DELETE FROM watchlist WHERE user_id = ? AND book_id = ?",
+                        (parent_instance.user_id, book_id),
+                    )
+                    conn.commit()
+                    conn.close()
+                    return True
+
+                def on_remove_success(_res):
+                    try:
+                        modal_ref.dismiss()
+                    except Exception:
+                        pass
+
+                    info_dialog = MDDialog(
+                        title="Removed",
+                        text=f"'{book_title[:40] + ('...' if len(book_title) > 40 else '')}' removed from watchlist.",
+                        buttons=[
+                            MDFlatButton(
+                                text="OK",
+                                on_release=lambda x: info_dialog.dismiss(),
+                            )
+                        ],
+                    )
+                    info_dialog.open()
+                    show_watchlist(None)
+
+                def on_remove_error(exc):
+                    err_dialog = MDDialog(
+                        title="Error",
+                        text=f"Failed to remove from watchlist: {exc}",
+                        buttons=[
+                            MDFlatButton(
+                                text="OK",
+                                on_release=lambda x: err_dialog.dismiss(),
+                            )
+                        ],
+                    )
+                    err_dialog.open()
+
+                run_with_loading(
+                    parent_instance,
+                    worker=worker_remove,
+                    on_success=on_remove_success,
+                    on_error=on_remove_error,
+                    message="Removing...",
+                    delay=0,
+                )
+
+            def confirm_remove(book_id, book_title, modal_ref):
+                confirm_dialog = MDDialog(
+                    title="Remove from Watchlist",
+                    text=f"Remove '{book_title[:40] + ('...' if len(book_title) > 40 else '')}'?",
+                    buttons=[
+                        MDFlatButton(
+                            text="CANCEL",
+                            on_release=lambda x: confirm_dialog.dismiss(),
+                        ),
+                        MDRaisedButton(
+                            text="REMOVE",
+                            md_bg_color=(0.96, 0.26, 0.21, 1),
+                            on_release=lambda x: (
+                                confirm_dialog.dismiss(),
+                                remove_from_watchlist(book_id, book_title, modal_ref),
+                            ),
+                        ),
+                    ],
+                )
+                confirm_dialog.open()
+
             modal = ModalView(
                 size_hint=(0.9, 0.85),
                 background='',
@@ -578,7 +654,7 @@ def load_profile_tab(content_scroll, parent_instance):
                     book_card = BoxLayout(
                         orientation='vertical',
                         size_hint_y=None,
-                        height=dp(124),
+                        height=dp(132),
                         padding=dp(15),
                         spacing=dp(6)
                     )
@@ -645,8 +721,22 @@ def load_profile_tab(content_scroll, parent_instance):
                         orientation='horizontal',
                         size_hint_y=None,
                         height=dp(34),
+                        spacing=dp(8),
                     )
                     actions_box.add_widget(BoxLayout())
+
+                    remove_btn = MDRaisedButton(
+                        text='REMOVE',
+                        size_hint=(None, None),
+                        size=(dp(96), dp(34)),
+                        md_bg_color=(0.96, 0.26, 0.21, 1),
+                        elevation=0,
+                    )
+                    remove_btn.bind(
+                        on_release=lambda _btn, bid=book_id, t=title, m=modal: confirm_remove(bid, t, m)
+                    )
+                    actions_box.add_widget(remove_btn)
+
                     read_btn = MDRaisedButton(
                         text='READ',
                         size_hint=(None, None),

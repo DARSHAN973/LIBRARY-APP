@@ -34,7 +34,40 @@ class AdminDashboard(MDScreen):
         self.current_section = 'dashboard'
         self.drawer_open = False
         self._section_loader = None
+        self._dashboard_refresh_ev = None
+        self._dashboard_refresh_seconds = 20
         self.build_ui()
+
+    def on_pre_enter(self, *args):
+        """Start live dashboard refresh when entering admin screen."""
+        self._start_dashboard_refresh()
+        return super().on_pre_enter(*args)
+
+    def on_pre_leave(self, *args):
+        """Stop live dashboard refresh when leaving admin screen."""
+        self._stop_dashboard_refresh()
+        return super().on_pre_leave(*args)
+
+    def _start_dashboard_refresh(self):
+        if self._dashboard_refresh_ev is None:
+            self._dashboard_refresh_ev = Clock.schedule_interval(
+                self._refresh_dashboard_if_visible,
+                self._dashboard_refresh_seconds,
+            )
+
+    def _stop_dashboard_refresh(self):
+        if self._dashboard_refresh_ev is not None:
+            self._dashboard_refresh_ev.cancel()
+            self._dashboard_refresh_ev = None
+
+    def _refresh_dashboard_if_visible(self, _dt):
+        if self.current_section != 'dashboard':
+            return
+        if self.manager is None or self.manager.current != self.name:
+            return
+        if self._section_loader is not None:
+            return
+        self.load_dashboard()
         
     def set_admin_name(self, admin_name):
         """Set logged-in admin name"""
@@ -481,5 +514,6 @@ class AdminDashboard(MDScreen):
         
     def logout(self, instance):
         """Logout and return to login"""
+        self._stop_dashboard_refresh()
         self.manager.current = 'login'
         print(f"Admin {self.admin_name} logged out")

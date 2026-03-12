@@ -737,6 +737,13 @@ def show_delete_confirmation(user_id, parent_instance, refresh_callback):
             def worker():
                 conn = sqlite3.connect('library.db')
                 cursor = conn.cursor()
+                # Remove dependent rows first to avoid FK constraint errors on PostgreSQL.
+                cursor.execute("DELETE FROM reading_history WHERE user_id = ?", (user_id,))
+                cursor.execute("DELETE FROM watchlist WHERE user_id = ?", (user_id,))
+                cursor.execute("DELETE FROM reading_sessions WHERE user_id = ?", (user_id,))
+                cursor.execute("DELETE FROM user_activity WHERE user_id = ?", (user_id,))
+                cursor.execute("DELETE FROM book_views WHERE user_id = ?", (user_id,))
+                cursor.execute("DELETE FROM book_downloads WHERE user_id = ?", (user_id,))
                 cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 conn.commit()
                 conn.close()
