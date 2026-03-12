@@ -513,10 +513,10 @@ def load_dashboard_content(content_scroll, navigate_callback):
         cursor.execute("SELECT SUM(views) FROM books")
         total_views = cursor.fetchone()[0] or 0
         
-        # Active users (logged in last 7 days)
+        # Active users (today)
         cursor.execute("""
-            SELECT COUNT(*) FROM users 
-            WHERE last_login >= datetime('now', '-7 days')
+            SELECT COUNT(*) FROM users
+            WHERE DATE(last_login) = date('now')
         """)
         active_users = cursor.fetchone()[0]
         
@@ -532,46 +532,18 @@ def load_dashboard_content(content_scroll, navigate_callback):
             height=dp(270)
         )
         
-        # Calculate total books trend (compare with last week)
-        cursor.execute("""
-            SELECT COUNT(*) FROM books 
-            WHERE created_at >= datetime('now', '-14 days') 
-            AND created_at < datetime('now', '-7 days')
-        """)
-        last_week_books = cursor.fetchone()[0]
-        cursor.execute("""
-            SELECT COUNT(*) FROM books 
-            WHERE created_at >= datetime('now', '-7 days')
-        """)
-        this_week_books = cursor.fetchone()[0]
+        # Trend placeholders (kept simple for cross-backend compatibility)
         books_trend = "+0%"
-        if last_week_books > 0:
-            pct = int(((this_week_books - last_week_books) / last_week_books) * 100)
-            books_trend = f"+{pct}%" if pct > 0 else f"{pct}%"
-        elif this_week_books > 0:
-            books_trend = "+100%"
         
-        # Calculate active users trend
-        cursor.execute("""
-            SELECT COUNT(*) FROM users 
-            WHERE last_login >= datetime('now', '-14 days') 
-            AND last_login < datetime('now', '-7 days')
-        """)
-        last_week_active = cursor.fetchone()[0]
         active_trend = "+0%"
-        if last_week_active > 0:
-            pct = int(((active_users - last_week_active) / last_week_active) * 100)
-            active_trend = f"+{pct}%" if pct > 0 else f"{pct}%"
-        elif active_users > 0:
-            active_trend = "+100%"
         
-        # Calculate total users trend
+        # New users today
         cursor.execute("""
-            SELECT COUNT(*) FROM users 
-            WHERE created_at >= datetime('now', '-7 days')
+            SELECT COUNT(*) FROM users
+            WHERE DATE(created_at) = date('now')
         """)
-        new_users_week = cursor.fetchone()[0]
-        users_trend = f"+{new_users_week}" if new_users_week > 0 else "0"
+        new_users_today = cursor.fetchone()[0]
+        users_trend = f"+{new_users_today}" if new_users_today > 0 else "0"
         
         # Card 1: Total Books
         kpi_grid.add_widget(create_gradient_card(
@@ -587,7 +559,7 @@ def load_dashboard_content(content_scroll, navigate_callback):
         
         # Card 3: Active Users
         kpi_grid.add_widget(create_gradient_card(
-            "account-group", active_users, "Active Users (7d)", active_trend,
+            "account-group", active_users, "Active Users (Today)", active_trend,
             (0.61, 0.15, 0.69, 1), (0.38, 0.09, 0.44, 1)  # Purple gradient
         ))
         
