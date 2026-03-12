@@ -470,7 +470,7 @@ def load_manage_books_content(content_scroll, parent_instance):
     )
     
     # Get filter data
-    conn = sqlite3.connect()
+    conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
 
     cursor.execute("SELECT DISTINCT subject FROM books WHERE subject IS NOT NULL AND subject != '' ORDER BY subject")
@@ -727,7 +727,7 @@ def load_books_page(books_container, pagination_container, state, search_field, 
         books_container.add_widget(loading_box)
     
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
 
         count_query = "SELECT COUNT(*) FROM books WHERE 1=1"
@@ -959,7 +959,7 @@ def save_new_book(title, subject, author, publisher, year, pdf_link, dialog, ref
         return
     
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO books (title, subject, author, publisher, year_of_publication, pdf_link)
@@ -1003,7 +1003,7 @@ def show_edit_form(book_id, parent_instance, refresh_callback):
     """Show edit book form"""
     
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             SELECT title, subject, author, publisher, year_of_publication, pdf_link
@@ -1156,7 +1156,7 @@ def update_book(book_id, title, subject, author, publisher, year, pdf_link, dial
         return
     
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE books
@@ -1201,7 +1201,7 @@ def update_book(book_id, title, subject, author, publisher, year, pdf_link, dial
 def show_view_details(book_id, parent_instance):
     """Show book details in a modal"""
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             SELECT title, subject, author, publisher, year_of_publication, pdf_link,
@@ -1295,7 +1295,7 @@ def show_delete_confirmation(book_id, parent_instance, refresh_callback):
     def after_title(title):
         def confirm_delete(dialog):
             def worker():
-                conn = sqlite3.connect()
+                conn = sqlite3.connect('library.db')
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM books WHERE id = ?", (book_id,))
                 conn.commit()
@@ -1348,7 +1348,7 @@ def show_delete_confirmation(book_id, parent_instance, refresh_callback):
         dialog.open()
 
     def worker_title():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("SELECT title FROM books WHERE id = ?", (book_id,))
         book = cursor.fetchone()

@@ -518,7 +518,7 @@ def create_change_password_dialog(parent_instance):
             return
         
         # Verify current password
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("SELECT password_hash FROM users WHERE id = 1")
         admin = cursor.fetchone()

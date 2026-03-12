@@ -69,7 +69,7 @@ def load_browse_tab(content_scroll, parent_instance):
     main_container.add_widget(search_field)
     
     # Get all subjects
-    conn = sqlite3.connect()
+    conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("""
         SELECT subject, COUNT(*) as count 

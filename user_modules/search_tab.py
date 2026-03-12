@@ -335,7 +335,7 @@ def load_search_tab(content_scroll, parent_instance):
         def do_search(dt):
             suggestions_container.clear_widgets()
             
-            conn = sqlite3.connect()
+            conn = sqlite3.connect('library.db')
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT DISTINCT id, title, author
@@ -477,7 +477,7 @@ def load_search_tab(content_scroll, parent_instance):
         save_recent_search(query)
 
         def worker():
-            conn = sqlite3.connect()
+            conn = sqlite3.connect('library.db')
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, title, subject, author, year_of_publication

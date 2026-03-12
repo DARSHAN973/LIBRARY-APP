@@ -445,7 +445,7 @@ def load_users(users_container, pagination_container, state, search_field, paren
         users_container.add_widget(loading_box)
     
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
 
         count_query = "SELECT COUNT(*) FROM users WHERE 1=1"
@@ -540,7 +540,7 @@ def change_page(new_page, users_container, pagination_container, state, search_f
 def show_user_details(user_id, parent_instance):
     """Show user details in a modal (read-only)"""
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             SELECT username, email, is_active, created_at, last_login
@@ -655,7 +655,7 @@ def show_toggle_status_confirmation(user_id, current_status, parent_instance, re
     
         def confirm_toggle(dialog):
             def worker():
-                conn = sqlite3.connect()
+                conn = sqlite3.connect('library.db')
                 cursor = conn.cursor()
                 cursor.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_status, user_id))
                 conn.commit()
@@ -711,7 +711,7 @@ def show_toggle_status_confirmation(user_id, current_status, parent_instance, re
         dialog.open()
 
     def load_username_worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
@@ -735,7 +735,7 @@ def show_delete_confirmation(user_id, parent_instance, refresh_callback):
     
         def confirm_delete(dialog):
             def worker():
-                conn = sqlite3.connect()
+                conn = sqlite3.connect('library.db')
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 conn.commit()
@@ -789,7 +789,7 @@ def show_delete_confirmation(user_id, parent_instance, refresh_callback):
         dialog.open()
 
     def load_username_worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()

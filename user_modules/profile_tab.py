@@ -57,7 +57,7 @@ def load_profile_tab(content_scroll, parent_instance):
     main_container.add_widget(header_box)
     
     # Get user info
-    conn = sqlite3.connect()
+    conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("SELECT username, email, phone FROM users WHERE id = ?", (parent_instance.user_id,))
     user = cursor.fetchone()
@@ -266,7 +266,7 @@ def load_profile_tab(content_scroll, parent_instance):
         from kivy.uix.scrollview import ScrollView
 
         def worker():
-            conn = sqlite3.connect()
+            conn = sqlite3.connect('library.db')
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT b.id, b.title, b.author, b.subject, b.pdf_link, MAX(rh.opened_at) AS last_opened
@@ -486,7 +486,7 @@ def load_profile_tab(content_scroll, parent_instance):
         from kivy.uix.scrollview import ScrollView
 
         def worker():
-            conn = sqlite3.connect()
+            conn = sqlite3.connect('library.db')
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT b.id, b.title, b.author, b.subject, b.pdf_link, w.added_at

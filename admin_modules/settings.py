@@ -267,7 +267,7 @@ def load_settings_content(content_scroll, parent_instance):
     main_container.add_widget(db_info_container)
 
     def load_db_info_worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]

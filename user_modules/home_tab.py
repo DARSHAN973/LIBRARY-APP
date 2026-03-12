@@ -117,7 +117,7 @@ def load_home_tab(content_scroll, parent_instance):
     )
     
     # Get user stats
-    conn = sqlite3.connect()
+    conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(DISTINCT book_id) FROM reading_history WHERE user_id = ?", (parent_instance.user_id,))
     books_read = cursor.fetchone()[0]
@@ -223,7 +223,7 @@ def load_home_tab(content_scroll, parent_instance):
     main_container.add_widget(subjects_header_box)
     
     # Get subjects from database
-    conn = sqlite3.connect()
+    conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("""
         SELECT subject, COUNT(*) as count 
@@ -439,7 +439,7 @@ def load_home_tab(content_scroll, parent_instance):
     main_container.add_widget(recent_header_box)
     
     # Get recent books with more details
-    conn = sqlite3.connect()
+    conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, title, year_of_publication, subject 
@@ -1036,7 +1036,7 @@ def load_book_list_page(parent_instance, page_title, books):
 def show_subject_books(parent_instance, subject):
     """Show all books of a specific subject in a dedicated page"""
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, title, author, year_of_publication, subject
@@ -1068,7 +1068,7 @@ def show_subject_books(parent_instance, subject):
 def show_book_details(parent_instance, book_id):
     """Fetch and show book details with delayed loading overlay."""
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("""
             SELECT title, author, year_of_publication, subject, pdf_link, publisher, medium
@@ -1370,7 +1370,7 @@ def _show_book_details_dialog(parent_instance, book_id, book):
 def mark_book_as_read(user_id, book_id):
     """Track that a user opened a book for reading."""
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO reading_history (user_id, book_id) VALUES (?, ?)",
@@ -1422,7 +1422,7 @@ def add_to_watchlist(parent_instance, user_id, book_id):
     from kivymd.toast import toast
 
     def worker():
-        conn = sqlite3.connect()
+        conn = sqlite3.connect('library.db')
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM watchlist WHERE user_id = ? AND book_id = ?", (user_id, book_id))
         exists = cursor.fetchone() is not None

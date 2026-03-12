@@ -17,7 +17,7 @@ class Database:
         
     def connect(self):
         """Connect using the configured remote database connection."""
-        self.conn = sqlite3.connect()
+        self.conn = sqlite3.connect('library.db')
         self.cursor = self.conn.cursor()
         return self.conn
         
