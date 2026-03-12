@@ -10,6 +10,8 @@ from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.dialog import MDDialog
 import sqlite3
+from utils import run_with_loading, LoadingOverlay
+from user_modules.home_tab import open_book_reader, mark_book_as_read
 
 
 def load_profile_tab(content_scroll, parent_instance):
@@ -32,9 +34,8 @@ def load_profile_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    profile_icon = MDLabel(
-        text="👤",
-        font_style='H5',
+    profile_icon = MDIcon(
+        icon='account-circle-outline',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),
@@ -56,13 +57,13 @@ def load_profile_tab(content_scroll, parent_instance):
     main_container.add_widget(header_box)
     
     # Get user info
-    conn = sqlite3.connect('library.db')
+    conn = sqlite3.connect()
     cursor = conn.cursor()
     cursor.execute("SELECT username, email, phone FROM users WHERE id = ?", (parent_instance.user_id,))
     user = cursor.fetchone()
     
     # Get stats
-    cursor.execute("SELECT COUNT(*) FROM reading_history WHERE user_id = ?", (parent_instance.user_id,))
+    cursor.execute("SELECT COUNT(DISTINCT book_id) FROM reading_history WHERE user_id = ?", (parent_instance.user_id,))
     books_read = cursor.fetchone()[0]
     
     cursor.execute("SELECT COUNT(*) FROM watchlist WHERE user_id = ?", (parent_instance.user_id,))
@@ -74,9 +75,9 @@ def load_profile_tab(content_scroll, parent_instance):
     user_card = BoxLayout(
         orientation='vertical',
         size_hint_y=None,
-        height=dp(100),
+        height=dp(150),
         padding=dp(15),
-        spacing=dp(6)
+        spacing=dp(10)
     )
     
     with user_card.canvas.before:
@@ -97,13 +98,12 @@ def load_profile_tab(content_scroll, parent_instance):
     user_header = BoxLayout(
         orientation='horizontal',
         size_hint_y=None,
-        height=dp(32),
+        height=dp(40),
         spacing=dp(8)
     )
     
-    user_avatar = MDLabel(
-        text="👤",
-        font_style='H6',
+    user_avatar = MDIcon(
+        icon='account',
         theme_text_color='Custom',
         text_color=(1, 1, 1, 1),
         size_hint=(None, None),
@@ -129,7 +129,7 @@ def load_profile_tab(content_scroll, parent_instance):
     ))
     
     user_name_box.add_widget(MDLabel(
-        text="✨ Active Reader",
+        text="Active Reader",
         font_style='Caption',
         theme_text_color='Custom',
         text_color=(1, 1, 1, 0.9),
@@ -149,9 +149,8 @@ def load_profile_tab(content_scroll, parent_instance):
             spacing=dp(6)
         )
         
-        email_icon = MDLabel(
-            text="📧",
-            font_style='Caption',
+        email_icon = MDIcon(
+            icon='email-outline',
             theme_text_color='Custom',
             text_color=(1, 1, 1, 0.9),
             size_hint=(None, None),
@@ -179,9 +178,8 @@ def load_profile_tab(content_scroll, parent_instance):
             spacing=dp(6)
         )
         
-        phone_icon = MDLabel(
-            text="📱",
-            font_style='Caption',
+        phone_icon = MDIcon(
+            icon='phone-outline',
             theme_text_color='Custom',
             text_color=(1, 1, 1, 0.9),
             size_hint=(None, None),
@@ -211,9 +209,8 @@ def load_profile_tab(content_scroll, parent_instance):
         padding=[dp(5), dp(10), 0, 0]
     )
     
-    stats_icon = MDLabel(
-        text="📊",
-        font_style='H5',
+    stats_icon = MDIcon(
+        icon='chart-box-outline',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),
@@ -264,182 +261,213 @@ def load_profile_tab(content_scroll, parent_instance):
     
     # ==================== READING HISTORY SECTION ====================
     def show_reading_history(instance):
-        """Show reading history in modal view"""
+        """Fetch and show reading history in modal view."""
         from kivy.uix.modalview import ModalView
         from kivy.uix.scrollview import ScrollView
-        
-        modal = ModalView(
-            size_hint=(0.9, 0.85),
-            background='',
-            background_color=(0, 0, 0, 0),
-            overlay_color=(0, 0, 0, 0.6)
-        )
-        
-        modal_content = BoxLayout(
-            orientation='vertical',
-            padding=dp(20),
-            spacing=dp(15)
-        )
-        
-        with modal_content.canvas.before:
-            Color(0.96, 0.96, 0.98, 1)
-            modal_content.bg = RoundedRectangle(
-                size=modal_content.size,
-                pos=modal_content.pos,
-                radius=[dp(16)]
+
+        def worker():
+            conn = sqlite3.connect()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT b.id, b.title, b.author, b.subject, b.pdf_link, MAX(rh.opened_at) AS last_opened
+                FROM reading_history rh
+                JOIN books b ON rh.book_id = b.id
+                WHERE rh.user_id = ?
+                GROUP BY b.id, b.title, b.author, b.subject, b.pdf_link
+                ORDER BY last_opened DESC
+                LIMIT 20
+            """, (parent_instance.user_id,))
+            history_books = cursor.fetchall()
+            conn.close()
+            return history_books
+
+        def on_success(history_books):
+            modal = ModalView(
+                size_hint=(0.9, 0.85),
+                background='',
+                background_color=(0, 0, 0, 0),
+                overlay_color=(0, 0, 0, 0.6)
             )
-        
-        modal_content.bind(
-            size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
-            pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
-        )
-        
-        # Header
-        header_box = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(50),
-            spacing=dp(10)
-        )
-        
-        header_icon = MDLabel(
-            text="📚",
-            font_style='H5',
-            theme_text_color='Custom',
-            text_color=(0.13, 0.59, 0.95, 1),
-            size_hint=(None, None),
-            size=(dp(32), dp(32)),
-            pos_hint={'center_y': 0.5}
-        )
-        header_box.add_widget(header_icon)
-        
-        header_label = MDLabel(
-            text='Reading History',
-            font_style='H5',
-            bold=True,
-            theme_text_color='Custom',
-            text_color=(0.1, 0.1, 0.1, 1),
-            size_hint_x=1,
-            pos_hint={'center_y': 0.5}
-        )
-        header_box.add_widget(header_label)
-        
-        close_btn = MDIconButton(
-            icon='close',
-            theme_text_color='Custom',
-            text_color=(0.5, 0.5, 0.5, 1),
-            on_release=lambda x: modal.dismiss()
-        )
-        header_box.add_widget(close_btn)
-        modal_content.add_widget(header_box)
-        
-        # Scroll view for books
-        scroll = ScrollView(size_hint=(1, 1))
-        books_container = BoxLayout(
-            orientation='vertical',
-            size_hint_y=None,
-            spacing=dp(10),
-            padding=dp(5)
-        )
-        books_container.bind(minimum_height=books_container.setter('height'))
-        
-        # Get reading history
-        conn = sqlite3.connect('library.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT b.title, b.author, b.subject, rh.opened_at
-            FROM reading_history rh
-            JOIN books b ON rh.book_id = b.id
-            WHERE rh.user_id = ?
-            ORDER BY rh.opened_at DESC
-            LIMIT 20
-        """, (parent_instance.user_id,))
-        history_books = cursor.fetchall()
-        conn.close()
-        
-        if history_books:
-            for title, author, subject, opened_at in history_books:
-                book_card = BoxLayout(
-                    orientation='vertical',
-                    size_hint_y=None,
-                    height=dp(90),
-                    padding=dp(15),
-                    spacing=dp(6)
+
+            modal_content = BoxLayout(
+                orientation='vertical',
+                padding=dp(20),
+                spacing=dp(15)
+            )
+
+            with modal_content.canvas.before:
+                Color(0.96, 0.96, 0.98, 1)
+                modal_content.bg = RoundedRectangle(
+                    size=modal_content.size,
+                    pos=modal_content.pos,
+                    radius=[dp(16)]
                 )
-                
-                with book_card.canvas.before:
-                    Color(1, 1, 1, 1)
-                    book_card.bg = RoundedRectangle(
-                        size=book_card.size,
-                        pos=book_card.pos,
-                        radius=[dp(12)]
-                    )
-                
-                book_card.bind(
-                    size=lambda inst, val, bg=book_card: setattr(bg.bg, 'size', inst.size),
-                    pos=lambda inst, val, bg=book_card: setattr(bg.bg, 'pos', inst.pos)
-                )
-                
-                book_card.add_widget(MDLabel(
-                    text=title[:60] + '...' if len(title) > 60 else title,
-                    font_style='Subtitle1',
-                    bold=True,
-                    theme_text_color='Custom',
-                    text_color=(0.15, 0.15, 0.15, 1),
-                    size_hint_y=None,
-                    height=dp(24)
-                ))
-                
-                if author:
-                    book_card.add_widget(MDLabel(
-                        text=f"by {author[:40]}" + ('...' if len(author) > 40 else ''),
-                        font_style='Body2',
-                        theme_text_color='Custom',
-                        text_color=(0.4, 0.4, 0.4, 1),
-                        size_hint_y=None,
-                        height=dp(20)
-                    ))
-                
-                meta_box = BoxLayout(
-                    orientation='horizontal',
-                    size_hint_y=None,
-                    height=dp(20),
-                    spacing=dp(10)
-                )
-                
-                if subject:
-                    meta_box.add_widget(MDLabel(
-                        text=f"📚 {subject[:20]}" + ('...' if len(subject) > 20 else ''),
-                        font_style='Caption',
-                        theme_text_color='Custom',
-                        text_color=(0.5, 0.5, 0.5, 1)
-                    ))
-                
-                if opened_at:
-                    meta_box.add_widget(MDLabel(
-                        text=f"📅 {opened_at}",
-                        font_style='Caption',
-                        theme_text_color='Custom',
-                        text_color=(0.5, 0.5, 0.5, 1)
-                    ))
-                
-                book_card.add_widget(meta_box)
-                books_container.add_widget(book_card)
-        else:
-            books_container.add_widget(MDLabel(
-                text="No reading history yet",
-                font_style='Body1',
-                halign='center',
+
+            modal_content.bind(
+                size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+                pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+            )
+
+            header_box = BoxLayout(
+                orientation='horizontal',
+                size_hint_y=None,
+                height=dp(50),
+                spacing=dp(10)
+            )
+
+            header_icon = MDIcon(
+                icon='book-open-page-variant-outline',
+                theme_text_color='Custom',
+                text_color=(0.13, 0.59, 0.95, 1),
+                size_hint=(None, None),
+                size=(dp(32), dp(32)),
+                pos_hint={'center_y': 0.5}
+            )
+            header_box.add_widget(header_icon)
+
+            header_label = MDLabel(
+                text='Reading History',
+                font_style='H5',
+                bold=True,
+                theme_text_color='Custom',
+                text_color=(0.1, 0.1, 0.1, 1),
+                size_hint_x=1,
+                pos_hint={'center_y': 0.5}
+            )
+            header_box.add_widget(header_label)
+
+            close_btn = MDIconButton(
+                icon='close',
                 theme_text_color='Custom',
                 text_color=(0.5, 0.5, 0.5, 1),
+                on_release=lambda x: modal.dismiss()
+            )
+            header_box.add_widget(close_btn)
+            modal_content.add_widget(header_box)
+
+            scroll = ScrollView(size_hint=(1, 1))
+            books_container = BoxLayout(
+                orientation='vertical',
                 size_hint_y=None,
-                height=dp(40)
-            ))
-        
-        scroll.add_widget(books_container)
-        modal_content.add_widget(scroll)
-        modal.add_widget(modal_content)
-        modal.open()
+                spacing=dp(10),
+                padding=dp(5)
+            )
+            books_container.bind(minimum_height=books_container.setter('height'))
+
+            if history_books:
+                for book_id, title, author, subject, pdf_link, opened_at in history_books:
+                    book_card = BoxLayout(
+                        orientation='vertical',
+                        size_hint_y=None,
+                        height=dp(124),
+                        padding=dp(15),
+                        spacing=dp(6)
+                    )
+
+                    with book_card.canvas.before:
+                        Color(1, 1, 1, 1)
+                        book_card.bg = RoundedRectangle(
+                            size=book_card.size,
+                            pos=book_card.pos,
+                            radius=[dp(12)]
+                        )
+
+                    book_card.bind(
+                        size=lambda inst, val, bg=book_card: setattr(bg.bg, 'size', inst.size),
+                        pos=lambda inst, val, bg=book_card: setattr(bg.bg, 'pos', inst.pos)
+                    )
+
+                    book_card.add_widget(MDLabel(
+                        text=title[:60] + '...' if len(title) > 60 else title,
+                        font_style='Subtitle1',
+                        bold=True,
+                        theme_text_color='Custom',
+                        text_color=(0.15, 0.15, 0.15, 1),
+                        size_hint_y=None,
+                        height=dp(24)
+                    ))
+
+                    if author:
+                        book_card.add_widget(MDLabel(
+                            text=f"by {author[:40]}" + ('...' if len(author) > 40 else ''),
+                            font_style='Body2',
+                            theme_text_color='Custom',
+                            text_color=(0.4, 0.4, 0.4, 1),
+                            size_hint_y=None,
+                            height=dp(20)
+                        ))
+
+                    meta_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(20),
+                        spacing=dp(10)
+                    )
+
+                    if subject:
+                        meta_box.add_widget(MDLabel(
+                            text=f"Subject: {subject[:20]}" + ('...' if len(subject) > 20 else ''),
+                            font_style='Caption',
+                            theme_text_color='Custom',
+                            text_color=(0.5, 0.5, 0.5, 1)
+                        ))
+
+                    if opened_at:
+                        meta_box.add_widget(MDLabel(
+                            text=f"Read on: {opened_at}",
+                            font_style='Caption',
+                            theme_text_color='Custom',
+                            text_color=(0.5, 0.5, 0.5, 1)
+                        ))
+
+                    book_card.add_widget(meta_box)
+
+                    actions_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(34),
+                    )
+                    actions_box.add_widget(BoxLayout())
+                    read_btn = MDRaisedButton(
+                        text='READ',
+                        size_hint=(None, None),
+                        size=(dp(96), dp(34)),
+                        md_bg_color=(0.13, 0.59, 0.95, 1),
+                        elevation=0,
+                    )
+                    read_btn.bind(
+                        on_release=lambda _btn, link=pdf_link, t=title, uid=parent_instance.user_id, bid=book_id: (
+                            mark_book_as_read(uid, bid),
+                            open_book_reader(parent_instance, link, t),
+                        )
+                    )
+                    actions_box.add_widget(read_btn)
+                    book_card.add_widget(actions_box)
+                    books_container.add_widget(book_card)
+            else:
+                books_container.add_widget(MDLabel(
+                    text="No reading history yet",
+                    font_style='Body1',
+                    halign='center',
+                    theme_text_color='Custom',
+                    text_color=(0.5, 0.5, 0.5, 1),
+                    size_hint_y=None,
+                    height=dp(40)
+                ))
+
+            scroll.add_widget(books_container)
+            modal_content.add_widget(scroll)
+            modal.add_widget(modal_content)
+            modal.open()
+
+        run_with_loading(
+            parent_instance,
+            worker=worker,
+            on_success=on_success,
+            on_error=lambda exc: None,
+            message="Loading...",
+            delay=0,
+        )
     
     history_section = create_action_card(
         icon='history',
@@ -453,182 +481,212 @@ def load_profile_tab(content_scroll, parent_instance):
     
     # ==================== WATCHLIST SECTION ====================
     def show_watchlist(instance):
-        """Show watchlist in modal view"""
+        """Fetch and show watchlist in modal view."""
         from kivy.uix.modalview import ModalView
         from kivy.uix.scrollview import ScrollView
-        
-        modal = ModalView(
-            size_hint=(0.9, 0.85),
-            background='',
-            background_color=(0, 0, 0, 0),
-            overlay_color=(0, 0, 0, 0.6)
-        )
-        
-        modal_content = BoxLayout(
-            orientation='vertical',
-            padding=dp(20),
-            spacing=dp(15)
-        )
-        
-        with modal_content.canvas.before:
-            Color(0.96, 0.96, 0.98, 1)
-            modal_content.bg = RoundedRectangle(
-                size=modal_content.size,
-                pos=modal_content.pos,
-                radius=[dp(16)]
+
+        def worker():
+            conn = sqlite3.connect()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT b.id, b.title, b.author, b.subject, b.pdf_link, w.added_at
+                FROM watchlist w
+                JOIN books b ON w.book_id = b.id
+                WHERE w.user_id = ?
+                ORDER BY w.added_at DESC
+                LIMIT 20
+            """, (parent_instance.user_id,))
+            watchlist_books = cursor.fetchall()
+            conn.close()
+            return watchlist_books
+
+        def on_success(watchlist_books):
+            modal = ModalView(
+                size_hint=(0.9, 0.85),
+                background='',
+                background_color=(0, 0, 0, 0),
+                overlay_color=(0, 0, 0, 0.6)
             )
-        
-        modal_content.bind(
-            size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
-            pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
-        )
-        
-        # Header
-        header_box = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(50),
-            spacing=dp(10)
-        )
-        
-        header_icon = MDLabel(
-            text="🔖",
-            font_style='H5',
-            theme_text_color='Custom',
-            text_color=(0.96, 0.61, 0.07, 1),
-            size_hint=(None, None),
-            size=(dp(32), dp(32)),
-            pos_hint={'center_y': 0.5}
-        )
-        header_box.add_widget(header_icon)
-        
-        header_label = MDLabel(
-            text='My Watchlist',
-            font_style='H5',
-            bold=True,
-            theme_text_color='Custom',
-            text_color=(0.1, 0.1, 0.1, 1),
-            size_hint_x=1,
-            pos_hint={'center_y': 0.5}
-        )
-        header_box.add_widget(header_label)
-        
-        close_btn = MDIconButton(
-            icon='close',
-            theme_text_color='Custom',
-            text_color=(0.5, 0.5, 0.5, 1),
-            on_release=lambda x: modal.dismiss()
-        )
-        header_box.add_widget(close_btn)
-        modal_content.add_widget(header_box)
-        
-        # Scroll view for books
-        scroll = ScrollView(size_hint=(1, 1))
-        books_container = BoxLayout(
-            orientation='vertical',
-            size_hint_y=None,
-            spacing=dp(10),
-            padding=dp(5)
-        )
-        books_container.bind(minimum_height=books_container.setter('height'))
-        
-        # Get watchlist
-        conn = sqlite3.connect('library.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT b.title, b.author, b.subject, w.added_at
-            FROM watchlist w
-            JOIN books b ON w.book_id = b.id
-            WHERE w.user_id = ?
-            ORDER BY w.added_at DESC
-            LIMIT 20
-        """, (parent_instance.user_id,))
-        watchlist_books = cursor.fetchall()
-        conn.close()
-        
-        if watchlist_books:
-            for title, author, subject, added_at in watchlist_books:
-                book_card = BoxLayout(
-                    orientation='vertical',
-                    size_hint_y=None,
-                    height=dp(90),
-                    padding=dp(15),
-                    spacing=dp(6)
+
+            modal_content = BoxLayout(
+                orientation='vertical',
+                padding=dp(20),
+                spacing=dp(15)
+            )
+
+            with modal_content.canvas.before:
+                Color(0.96, 0.96, 0.98, 1)
+                modal_content.bg = RoundedRectangle(
+                    size=modal_content.size,
+                    pos=modal_content.pos,
+                    radius=[dp(16)]
                 )
-                
-                with book_card.canvas.before:
-                    Color(1, 1, 1, 1)
-                    book_card.bg = RoundedRectangle(
-                        size=book_card.size,
-                        pos=book_card.pos,
-                        radius=[dp(12)]
-                    )
-                
-                book_card.bind(
-                    size=lambda inst, val, bg=book_card: setattr(bg.bg, 'size', inst.size),
-                    pos=lambda inst, val, bg=book_card: setattr(bg.bg, 'pos', inst.pos)
-                )
-                
-                book_card.add_widget(MDLabel(
-                    text=title[:60] + '...' if len(title) > 60 else title,
-                    font_style='Subtitle1',
-                    bold=True,
-                    theme_text_color='Custom',
-                    text_color=(0.15, 0.15, 0.15, 1),
-                    size_hint_y=None,
-                    height=dp(24)
-                ))
-                
-                if author:
-                    book_card.add_widget(MDLabel(
-                        text=f"by {author[:40]}" + ('...' if len(author) > 40 else ''),
-                        font_style='Body2',
-                        theme_text_color='Custom',
-                        text_color=(0.4, 0.4, 0.4, 1),
-                        size_hint_y=None,
-                        height=dp(20)
-                    ))
-                
-                meta_box = BoxLayout(
-                    orientation='horizontal',
-                    size_hint_y=None,
-                    height=dp(20),
-                    spacing=dp(10)
-                )
-                
-                if subject:
-                    meta_box.add_widget(MDLabel(
-                        text=f"📚 {subject[:20]}" + ('...' if len(subject) > 20 else ''),
-                        font_style='Caption',
-                        theme_text_color='Custom',
-                        text_color=(0.5, 0.5, 0.5, 1)
-                    ))
-                
-                if added_at:
-                    meta_box.add_widget(MDLabel(
-                        text=f"⭐ Added {added_at}",
-                        font_style='Caption',
-                        theme_text_color='Custom',
-                        text_color=(0.5, 0.5, 0.5, 1)
-                    ))
-                
-                book_card.add_widget(meta_box)
-                books_container.add_widget(book_card)
-        else:
-            books_container.add_widget(MDLabel(
-                text="No books in watchlist yet",
-                font_style='Body1',
-                halign='center',
+
+            modal_content.bind(
+                size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+                pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+            )
+
+            header_box = BoxLayout(
+                orientation='horizontal',
+                size_hint_y=None,
+                height=dp(50),
+                spacing=dp(10)
+            )
+
+            header_icon = MDIcon(
+                icon='bookmark-multiple-outline',
+                theme_text_color='Custom',
+                text_color=(0.96, 0.61, 0.07, 1),
+                size_hint=(None, None),
+                size=(dp(32), dp(32)),
+                pos_hint={'center_y': 0.5}
+            )
+            header_box.add_widget(header_icon)
+
+            header_label = MDLabel(
+                text='My Watchlist',
+                font_style='H5',
+                bold=True,
+                theme_text_color='Custom',
+                text_color=(0.1, 0.1, 0.1, 1),
+                size_hint_x=1,
+                pos_hint={'center_y': 0.5}
+            )
+            header_box.add_widget(header_label)
+
+            close_btn = MDIconButton(
+                icon='close',
                 theme_text_color='Custom',
                 text_color=(0.5, 0.5, 0.5, 1),
+                on_release=lambda x: modal.dismiss()
+            )
+            header_box.add_widget(close_btn)
+            modal_content.add_widget(header_box)
+
+            scroll = ScrollView(size_hint=(1, 1))
+            books_container = BoxLayout(
+                orientation='vertical',
                 size_hint_y=None,
-                height=dp(40)
-            ))
-        
-        scroll.add_widget(books_container)
-        modal_content.add_widget(scroll)
-        modal.add_widget(modal_content)
-        modal.open()
+                spacing=dp(10),
+                padding=dp(5)
+            )
+            books_container.bind(minimum_height=books_container.setter('height'))
+
+            if watchlist_books:
+                for book_id, title, author, subject, pdf_link, added_at in watchlist_books:
+                    book_card = BoxLayout(
+                        orientation='vertical',
+                        size_hint_y=None,
+                        height=dp(124),
+                        padding=dp(15),
+                        spacing=dp(6)
+                    )
+
+                    with book_card.canvas.before:
+                        Color(1, 1, 1, 1)
+                        book_card.bg = RoundedRectangle(
+                            size=book_card.size,
+                            pos=book_card.pos,
+                            radius=[dp(12)]
+                        )
+
+                    book_card.bind(
+                        size=lambda inst, val, bg=book_card: setattr(bg.bg, 'size', inst.size),
+                        pos=lambda inst, val, bg=book_card: setattr(bg.bg, 'pos', inst.pos)
+                    )
+
+                    book_card.add_widget(MDLabel(
+                        text=title[:60] + '...' if len(title) > 60 else title,
+                        font_style='Subtitle1',
+                        bold=True,
+                        theme_text_color='Custom',
+                        text_color=(0.15, 0.15, 0.15, 1),
+                        size_hint_y=None,
+                        height=dp(24)
+                    ))
+
+                    if author:
+                        book_card.add_widget(MDLabel(
+                            text=f"by {author[:40]}" + ('...' if len(author) > 40 else ''),
+                            font_style='Body2',
+                            theme_text_color='Custom',
+                            text_color=(0.4, 0.4, 0.4, 1),
+                            size_hint_y=None,
+                            height=dp(20)
+                        ))
+
+                    meta_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(20),
+                        spacing=dp(10)
+                    )
+
+                    if subject:
+                        meta_box.add_widget(MDLabel(
+                            text=f"Subject: {subject[:20]}" + ('...' if len(subject) > 20 else ''),
+                            font_style='Caption',
+                            theme_text_color='Custom',
+                            text_color=(0.5, 0.5, 0.5, 1)
+                        ))
+
+                    if added_at:
+                        meta_box.add_widget(MDLabel(
+                            text=f"Added: {added_at}",
+                            font_style='Caption',
+                            theme_text_color='Custom',
+                            text_color=(0.5, 0.5, 0.5, 1)
+                        ))
+
+                    book_card.add_widget(meta_box)
+
+                    actions_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(34),
+                    )
+                    actions_box.add_widget(BoxLayout())
+                    read_btn = MDRaisedButton(
+                        text='READ',
+                        size_hint=(None, None),
+                        size=(dp(96), dp(34)),
+                        md_bg_color=(0.13, 0.59, 0.95, 1),
+                        elevation=0,
+                    )
+                    read_btn.bind(
+                        on_release=lambda _btn, link=pdf_link, t=title, uid=parent_instance.user_id, bid=book_id: (
+                            mark_book_as_read(uid, bid),
+                            open_book_reader(parent_instance, link, t),
+                        )
+                    )
+                    actions_box.add_widget(read_btn)
+                    book_card.add_widget(actions_box)
+                    books_container.add_widget(book_card)
+            else:
+                books_container.add_widget(MDLabel(
+                    text="No books in watchlist yet",
+                    font_style='Body1',
+                    halign='center',
+                    theme_text_color='Custom',
+                    text_color=(0.5, 0.5, 0.5, 1),
+                    size_hint_y=None,
+                    height=dp(40)
+                ))
+
+            scroll.add_widget(books_container)
+            modal_content.add_widget(scroll)
+            modal.add_widget(modal_content)
+            modal.open()
+
+        run_with_loading(
+            parent_instance,
+            worker=worker,
+            on_success=on_success,
+            on_error=lambda exc: None,
+            message="Loading...",
+            delay=0,
+        )
     
     watchlist_section = create_action_card(
         icon='bookmark-multiple',
@@ -688,9 +746,8 @@ def load_profile_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    logout_icon = MDLabel(
-        text="🚪",
-        font_style='H6',
+    logout_icon = MDIcon(
+        icon='logout',
         theme_text_color='Custom',
         text_color=(0.96, 0.26, 0.21, 1),
         size_hint=(None, None),
@@ -733,8 +790,17 @@ def load_profile_tab(content_scroll, parent_instance):
     def perform_logout(dialog, parent):
         """Perform logout"""
         dialog.dismiss()
-        # Navigate back to login screen
-        parent.manager.current = 'login'
+        logout_loader = LoadingOverlay(message="Loading...", delay=0)
+        logout_loader.start()
+
+        def do_logout(_dt):
+            try:
+                parent.manager.current = 'login'
+            finally:
+                logout_loader.stop()
+
+        from kivy.clock import Clock
+        Clock.schedule_once(do_logout, 0)
     
     logout_btn = MDRaisedButton(
         text="LOGOUT",
@@ -786,16 +852,8 @@ def create_stat_card_modern(icon, title, count, color):
         ]
     )
     
-    # Icon - map to emoji
-    icon_map = {
-        'book-check': '✓️',
-        'bookmark': '🔖'
-    }
-    icon_emoji = icon_map.get(icon, '📚')
-    
-    icon_widget = MDLabel(
-        text=icon_emoji,
-        font_style='H5',
+    icon_widget = MDIcon(
+        icon=icon,
         theme_text_color='Custom',
         text_color=color,
         size_hint=(None, None),
@@ -852,13 +910,7 @@ def create_action_card(icon, title, subtitle, button_text, icon_color, on_button
         pos=lambda inst, val, bg=card: setattr(bg.bg, 'pos', inst.pos)
     )
     
-    # Header with icon
-    icon_map = {
-        'history': '📚',
-        'bookmark-multiple': '🔖'
-    }
-    icon_emoji = icon_map.get(icon, '📚')
-    
+    # Header with Material icon
     header_box = BoxLayout(
         orientation='horizontal',
         size_hint_y=None,
@@ -866,9 +918,8 @@ def create_action_card(icon, title, subtitle, button_text, icon_color, on_button
         spacing=dp(10)
     )
     
-    icon_widget = MDLabel(
-        text=icon_emoji,
-        font_style='H6',
+    icon_widget = MDIcon(
+        icon=icon,
         theme_text_color='Custom',
         text_color=icon_color,
         size_hint=(None, None),

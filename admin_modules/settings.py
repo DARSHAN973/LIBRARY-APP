@@ -16,6 +16,7 @@ import sqlite3
 import json
 import os
 import platform
+from utils import run_with_loading
 
 
 # Settings file path - store in data directory
@@ -261,46 +262,87 @@ def load_settings_content(content_scroll, parent_instance):
     main_container.add_widget(pagination_section)
     
     # ==================== DATABASE INFO (READ-ONLY) ====================
-    # Get database stats
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total_users = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM books")
-    total_books = cursor.fetchone()[0]
-    conn.close()
-    
-    db_info_section = create_settings_section(
-        "Database Information",
-        "database",
-        [
-            ("Database Type", "SQLite", "database-settings"),
-            ("Storage", "Local (library.db)", "harddisk"),
-            ("Status", "✅ Connected", "check-circle"),
-            ("Total Books", str(total_books), "book-open-variant"),
-            ("Total Users", str(total_users), "account-multiple"),
-        ],
-        read_only=True
+    db_info_container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(0))
+    db_info_container.bind(minimum_height=db_info_container.setter('height'))
+    main_container.add_widget(db_info_container)
+
+    def load_db_info_worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM books")
+        total_books = cursor.fetchone()[0]
+        conn.close()
+        return total_users, total_books
+
+    def load_db_info_success(result):
+        total_users, total_books = result
+        db_info_container.clear_widgets()
+        db_info_section = create_settings_section(
+            "Database Information",
+            "database",
+            [
+                ("Database Type", "SQLite", "database-settings"),
+                ("Storage", "Local (library.db)", "harddisk"),
+                ("Status", "Connected", "check-circle"),
+                ("Total Books", str(total_books), "book-open-variant"),
+                ("Total Users", str(total_users), "account-multiple"),
+            ],
+            read_only=True
+        )
+        db_info_container.add_widget(db_info_section)
+
+    run_with_loading(
+        parent_instance,
+        worker=load_db_info_worker,
+        on_success=load_db_info_success,
+        on_error=lambda exc: None,
+        message="Loading database info...",
+        delay=0.5,
     )
-    main_container.add_widget(db_info_section)
     
     # ==================== SAVE BUTTON ====================
     def save_settings_action(instance):
-        save_settings(current_settings)
-        settings_modified['changed'] = False
-        
-        # Show success dialog
-        success_dialog = MDDialog(
-            title="Settings Saved",
-            text=f"Settings have been saved successfully!\n\nItems per page: {current_settings['items_per_page']}",
-            buttons=[
-                MDFlatButton(
-                    text="OK",
-                    on_release=lambda x: success_dialog.dismiss()
-                )
-            ]
+        def worker():
+            save_settings(current_settings)
+            return current_settings['items_per_page']
+
+        def on_success(items_per_page):
+            settings_modified['changed'] = False
+            success_dialog = MDDialog(
+                title="Settings Saved",
+                text=f"Settings have been saved successfully!\n\nItems per page: {items_per_page}",
+                buttons=[
+                    MDFlatButton(
+                        text="OK",
+                        on_release=lambda x: success_dialog.dismiss()
+                    )
+                ]
+            )
+            success_dialog.open()
+
+        def on_error(exc):
+            error_dialog = MDDialog(
+                title="Save Failed",
+                text=f"Could not save settings: {exc}",
+                buttons=[
+                    MDFlatButton(
+                        text="OK",
+                        on_release=lambda x: error_dialog.dismiss()
+                    )
+                ]
+            )
+            error_dialog.open()
+
+        run_with_loading(
+            parent_instance,
+            worker=worker,
+            on_success=on_success,
+            on_error=on_error,
+            message="Saving settings...",
+            delay=0.5,
         )
-        success_dialog.open()
     
     save_btn = MDRaisedButton(
         text="SAVE SETTINGS",

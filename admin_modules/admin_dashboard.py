@@ -10,6 +10,7 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
 from kivy.animation import Animation
+from kivy.clock import Clock
 from kivy.core.window import Window
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
@@ -20,6 +21,7 @@ from admin_modules.manage_books import load_manage_books_content
 from admin_modules.manage_users import load_manage_users_content
 from admin_modules.admin_auth import load_admin_auth_content
 from admin_modules.settings import load_settings_content
+from utils import LoadingOverlay
 
 
 class AdminDashboard(MDScreen):
@@ -31,6 +33,7 @@ class AdminDashboard(MDScreen):
         self.admin_name = ''
         self.current_section = 'dashboard'
         self.drawer_open = False
+        self._section_loader = None
         self.build_ui()
         
     def set_admin_name(self, admin_name):
@@ -410,16 +413,31 @@ class AdminDashboard(MDScreen):
         Args:
             section (str): Section ID to load
         """
-        if section == 'dashboard':
-            self.load_dashboard()
-        elif section == 'manage_books':
-            self.load_manage_books()
-        elif section == 'manage_users':
-            self.load_manage_users()
-        elif section == 'admin_authentication':
-            self.load_admin_auth()
-        elif section == 'system_settings':
-            self.load_settings()
+        section_to_loader = {
+            'dashboard': ("Loading dashboard...", self.load_dashboard),
+            'manage_books': ("Loading books...", self.load_manage_books),
+            'manage_users': ("Loading users...", self.load_manage_users),
+            'admin_authentication': ("Loading admin auth...", self.load_admin_auth),
+            'system_settings': ("Loading settings...", self.load_settings),
+        }
+
+        if section not in section_to_loader:
+            return
+
+        message, loader_func = section_to_loader[section]
+        if self._section_loader is not None:
+            self._section_loader.stop()
+        self._section_loader = LoadingOverlay(message=message, delay=0)
+        self._section_loader.start()
+
+        def do_load(_dt):
+            try:
+                loader_func()
+            finally:
+                if self._section_loader is not None:
+                    self._section_loader.stop()
+
+        Clock.schedule_once(do_load, 0.1)
             
     def load_dashboard(self):
         """Load modern dashboard with KPIs, insights, and quick actions"""
@@ -464,4 +482,4 @@ class AdminDashboard(MDScreen):
     def logout(self, instance):
         """Logout and return to login"""
         self.manager.current = 'login'
-        print(f"✓ Admin {self.admin_name} logged out")
+        print(f"Admin {self.admin_name} logged out")

@@ -15,7 +15,8 @@ from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
 from kivymd.uix.card import MDCard
 import sqlite3
-from utils import open_url_safely
+import threading
+from utils import open_url_safely, open_url_in_app_webview, run_with_loading
 
 
 def load_home_tab(content_scroll, parent_instance): 
@@ -76,9 +77,8 @@ def load_home_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    greeting_icon = MDLabel(
-        text="👋",
-        font_style='H5',
+    greeting_icon = MDIcon(
+        icon='hand-wave-outline',
         theme_text_color='Custom',
         text_color=(1, 1, 1, 1),
         size_hint=(None, None),
@@ -117,9 +117,9 @@ def load_home_tab(content_scroll, parent_instance):
     )
     
     # Get user stats
-    conn = sqlite3.connect('library.db')
+    conn = sqlite3.connect()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM reading_history WHERE user_id = ?", (parent_instance.user_id,))
+    cursor.execute("SELECT COUNT(DISTINCT book_id) FROM reading_history WHERE user_id = ?", (parent_instance.user_id,))
     books_read = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM watchlist WHERE user_id = ?", (parent_instance.user_id,))
     saved_books = cursor.fetchone()[0]
@@ -223,7 +223,7 @@ def load_home_tab(content_scroll, parent_instance):
     main_container.add_widget(subjects_header_box)
     
     # Get subjects from database
-    conn = sqlite3.connect('library.db')
+    conn = sqlite3.connect()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT subject, COUNT(*) as count 
@@ -439,7 +439,7 @@ def load_home_tab(content_scroll, parent_instance):
     main_container.add_widget(recent_header_box)
     
     # Get recent books with more details
-    conn = sqlite3.connect('library.db')
+    conn = sqlite3.connect()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, title, year_of_publication, subject 
@@ -699,7 +699,7 @@ def load_book_list_page(parent_instance, page_title, books):
         text_color=(1, 1, 1, 1),
         icon_size='26sp',
         pos_hint={'center_x': 0.5, 'center_y': 0.5},
-        on_release=lambda x: load_home_tab(parent_instance.content_scroll, parent_instance)
+        on_release=lambda x: parent_instance.load_home()
     )
     back_circle.add_widget(back_btn)
     back_container.add_widget(back_circle)
@@ -1035,41 +1035,73 @@ def load_book_list_page(parent_instance, page_title, books):
 
 def show_subject_books(parent_instance, subject):
     """Show all books of a specific subject in a dedicated page"""
-    # Get books for this subject
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, title, author, year_of_publication, subject 
-        FROM books 
-        WHERE subject = ? 
-        ORDER BY title
-    """, (subject,))
-    books = cursor.fetchall()
-    conn.close()
-    
-    # Load the dynamic book list page
-    load_book_list_page(parent_instance, subject, books)
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, title, author, year_of_publication, subject
+            FROM books
+            WHERE subject = ?
+            ORDER BY title
+        """, (subject,))
+        books = cursor.fetchall()
+        conn.close()
+        return books
+
+    def on_success(books):
+        load_book_list_page(parent_instance, subject, books)
+
+    def on_error(_exc):
+        from kivymd.toast import toast
+        toast("Unable to load books right now")
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Loading books...",
+        delay=0.5,
+    )
 
 
 def show_book_details(parent_instance, book_id):
+    """Fetch and show book details with delayed loading overlay."""
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT title, author, year_of_publication, subject, pdf_link, publisher, medium
+            FROM books
+            WHERE id = ?
+        """, (book_id,))
+        book = cursor.fetchone()
+        conn.close()
+        return book
+
+    def on_success(book):
+        if not book:
+            return
+        _show_book_details_dialog(parent_instance, book_id, book)
+
+    def on_error(_exc):
+        from kivymd.toast import toast
+        toast("Could not load book details")
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Loading book details...",
+        delay=0.5,
+    )
+
+
+def _show_book_details_dialog(parent_instance, book_id, book):
     """Show book details in a modern, well-styled dialog"""
     from kivymd.uix.dialog import MDDialog
     from kivy.uix.widget import Widget
-    import webbrowser
-    
-    # Get book details
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT title, author, year_of_publication, subject, pdf_link, publisher, medium
-        FROM books 
-        WHERE id = ?
-    """, (book_id,))
-    book = cursor.fetchone()
-    conn.close()
-    
-    if not book:
-        return
     
     title, author, year, subject, pdf_link, publisher, medium = book
     
@@ -1270,7 +1302,7 @@ def show_book_details(parent_instance, book_id):
         padding=[dp(24), dp(12), dp(24), dp(12)]
     )
     
-    # Read Now Button - OPENS IN BROWSER (always show)
+    # Read Now Button - opens in app when available
     read_btn = MDRaisedButton(
         text="READ NOW" if pdf_link else "NO PDF",
         size_hint_x=0.65,
@@ -1280,7 +1312,12 @@ def show_book_details(parent_instance, book_id):
         disabled=not pdf_link
     )
     if pdf_link:
-        read_btn.bind(on_release=lambda x: [open_url_safely(pdf_link), dialog.dismiss()])
+        def start_reading(instance):
+            mark_book_as_read(parent_instance.user_id, book_id)
+            open_book_reader(parent_instance, pdf_link, title)
+            dialog.dismiss()
+
+        read_btn.bind(on_release=start_reading)
     action_container.add_widget(read_btn)
     
     # Watchlist Button - ICON ONLY (always show)
@@ -1307,7 +1344,9 @@ def show_book_details(parent_instance, book_id):
         pos=lambda inst, val: setattr(inst.rect, 'pos', val),
         size=lambda inst, val: setattr(inst.rect, 'size', val)
     )
-    watchlist_icon_btn.bind(on_release=lambda x: [add_to_watchlist(parent_instance.user_id, book_id), dialog.dismiss()])
+    watchlist_icon_btn.bind(
+        on_release=lambda x: [add_to_watchlist(parent_instance, parent_instance.user_id, book_id), dialog.dismiss()]
+    )
     action_container.add_widget(watchlist_icon_btn)
     
     content.add_widget(action_container)
@@ -1328,75 +1367,85 @@ def show_book_details(parent_instance, book_id):
     dialog.open()
 
 
-def open_pdf_in_app(parent_instance, pdf_link, title):
-    """Open PDF in app using a webview or local viewer"""
-    from kivymd.uix.dialog import MDDialog
-    
-    # For now, we'll show a simple message
-    # In production, you'd integrate a PDF viewer library
-    content = BoxLayout(
-        orientation='vertical',
-        size_hint_y=None,
-        height=dp(150),
-        padding=dp(20),
-        spacing=dp(15)
-    )
-    
-    content.add_widget(MDLabel(
-        text=f"Opening: {title[:50]}...",
-        font_style='Subtitle1',
-        bold=True,
-        size_hint_y=None,
-        height=dp(40)
-    ))
-    
-    content.add_widget(MDLabel(
-        text="PDF viewer integration coming soon!\\nFor now, the PDF will open in your default browser.",
-        font_style='Body2',
-        halign='center',
-        size_hint_y=None,
-        height=dp(60)
-    ))
-    
-    def open_in_browser(instance):
-        open_url_safely(pdf_link)
-        dialog.dismiss()
-    
-    dialog = MDDialog(
-        title="PDF Viewer",
-        type="custom",
-        content_cls=content,
-        buttons=[
-            MDRaisedButton(
-                text="OPEN IN BROWSER",
-                on_release=open_in_browser
-            ),
+def mark_book_as_read(user_id, book_id):
+    """Track that a user opened a book for reading."""
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO reading_history (user_id, book_id) VALUES (?, ?)",
+            (user_id, book_id),
+        )
+        conn.commit()
+        conn.close()
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def open_book_reader(parent_instance, pdf_link, title):
+    """Open book in app if webview is available; otherwise fall back safely."""
+    # Primary path on Android: native in-app WebView dialog.
+    if open_url_in_app_webview(pdf_link, title="Book Reader"):
+        return
+
+    try:
+        from kivy.uix.modalview import ModalView
+        from kivy.uix.boxlayout import BoxLayout
+        from kivymd.uix.button import MDFlatButton
+        from kivymd.uix.label import MDLabel
+        from kivy_garden.webview import WebView
+
+        reader_modal = ModalView(size_hint=(0.96, 0.96), auto_dismiss=False)
+        wrapper = BoxLayout(orientation='vertical', spacing=dp(6), padding=dp(6))
+
+        top_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(42))
+        top_row.add_widget(MDLabel(text=title[:60], bold=True))
+        top_row.add_widget(
             MDFlatButton(
-                text="CANCEL",
-                on_release=lambda x: dialog.dismiss()
+                text='CLOSE',
+                on_release=lambda x: reader_modal.dismiss(),
             )
-        ]
-    )
-    dialog.open()
+        )
+        wrapper.add_widget(top_row)
+
+        viewer = WebView(url=pdf_link)
+        wrapper.add_widget(viewer)
+        reader_modal.add_widget(wrapper)
+        reader_modal.open()
+        return
+    except Exception:
+        open_url_safely(pdf_link)
 
 
-def add_to_watchlist(user_id, book_id):
+def add_to_watchlist(parent_instance, user_id, book_id):
     """Add book to user's watchlist"""
     from kivymd.toast import toast
-    
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    
-    # Check if already in watchlist
-    cursor.execute("SELECT id FROM watchlist WHERE user_id = ? AND book_id = ?", (user_id, book_id))
-    if cursor.fetchone():
-        toast("Already in watchlist!")
+
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM watchlist WHERE user_id = ? AND book_id = ?", (user_id, book_id))
+        exists = cursor.fetchone() is not None
+        if not exists:
+            cursor.execute("INSERT INTO watchlist (user_id, book_id) VALUES (?, ?)", (user_id, book_id))
+            conn.commit()
         conn.close()
-        return
-    
-    # Add to watchlist
-    cursor.execute("INSERT INTO watchlist (user_id, book_id) VALUES (?, ?)", (user_id, book_id))
-    conn.commit()
-    conn.close()
-    
-    toast("Added to watchlist!")
+        return exists
+
+    def on_success(exists):
+        if exists:
+            toast("Already in watchlist")
+        else:
+            toast("Added to watchlist")
+
+    def on_error(_exc):
+        toast("Could not update watchlist")
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Updating watchlist...",
+        delay=0.5,
+    )

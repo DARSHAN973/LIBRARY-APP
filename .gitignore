@@ -1,0 +1,18 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+
+# Build and packaging outputs
+.buildozer/
+bin/
+
+# Local database/artifacts
+library.db
+
+# OS/editor files
+.DS_Store

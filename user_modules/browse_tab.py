@@ -15,7 +15,7 @@ import sqlite3
 
 def load_browse_tab(content_scroll, parent_instance):
     """Load browse tab content"""
-    from user_modules.home_tab import load_book_list_page
+    from user_modules.home_tab import load_book_list_page, show_subject_books
     
     content_scroll.clear_widgets()
     
@@ -35,9 +35,8 @@ def load_browse_tab(content_scroll, parent_instance):
         spacing=dp(10)
     )
     
-    header_icon = MDLabel(
-        text="🔎",
-        font_style='H5',
+    header_icon = MDIcon(
+        icon='magnify',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),
@@ -70,7 +69,7 @@ def load_browse_tab(content_scroll, parent_instance):
     main_container.add_widget(search_field)
     
     # Get all subjects
-    conn = sqlite3.connect('library.db')
+    conn = sqlite3.connect()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT subject, COUNT(*) as count 
@@ -187,20 +186,7 @@ def load_browse_tab(content_scroll, parent_instance):
             # Add click handler to open dynamic book list page
             def on_subject_click(instance, touch, subj=subject):
                 if instance.collide_point(*touch.pos):
-                    # Fetch books for this subject
-                    conn = sqlite3.connect('library.db')
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        SELECT id, title, author, year_of_publication, subject 
-                        FROM books 
-                        WHERE subject = ? 
-                        ORDER BY title
-                    """, (subj,))
-                    books = cursor.fetchall()
-                    conn.close()
-                    
-                    # Load dynamic book list page
-                    load_book_list_page(parent_instance, subj, books)
+                    show_subject_books(parent_instance, subj)
             
             subject_card.bind(on_touch_down=on_subject_click)
             

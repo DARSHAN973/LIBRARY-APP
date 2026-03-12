@@ -24,6 +24,7 @@ from kivymd.uix.selectioncontrol import MDSwitch
 from kivymd.icon_definitions import md_icons
 from functools import partial
 import sqlite3
+from utils import run_with_loading
 
 
 def create_book_card(book_data, edit_callback, delete_callback, view_callback):
@@ -469,20 +470,16 @@ def load_manage_books_content(content_scroll, parent_instance):
     )
     
     # Get filter data
-    conn = sqlite3.connect('library.db')
+    conn = sqlite3.connect()
     cursor = conn.cursor()
-    
-    # Limit subject names to prevent overflow
+
     cursor.execute("SELECT DISTINCT subject FROM books WHERE subject IS NOT NULL AND subject != '' ORDER BY subject")
     all_subjects_raw = [s[0] for s in cursor.fetchall()]
-    # Filter out subjects with non-ASCII characters and clean them
     all_subjects = [s for s in all_subjects_raw if s and s.isascii() and s.isprintable()]
-    # Truncate long subject names to max 25 characters
     subjects = ['All Subjects'] + [s[:25] + '...' if len(s) > 25 else s for s in all_subjects]
-    
+
     cursor.execute("SELECT DISTINCT publisher FROM books WHERE publisher IS NOT NULL AND publisher != '' ORDER BY publisher LIMIT 30")
     all_publishers = [pub[0] for pub in cursor.fetchall() if pub[0]]
-    # Truncate long publisher names to max 25 characters
     publishers = ['All Publishers'] + [p[:25] + '...' if len(p) > 25 else p for p in all_publishers]
     conn.close()
 
@@ -729,81 +726,97 @@ def load_books_page(books_container, pagination_container, state, search_field, 
         loading_box.add_widget(loading_label)
         books_container.add_widget(loading_box)
     
-    # Build query
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    
-    # Count total books
-    count_query = "SELECT COUNT(*) FROM books WHERE 1=1"
-    where_params = []
-    
-    # Search filter (universal - searches all books)
-    if search_field.text.strip():
-        search_term = f"%{search_field.text.strip()}%"
-        count_query += " AND (title LIKE ? OR subject LIKE ? OR publisher LIKE ? OR author LIKE ?)"
-        where_params.extend([search_term, search_term, search_term, search_term])
-    
-    # Subject filter
-    if state['selected_subject'] != 'All Subjects':
-        count_query += " AND subject = ?"
-        where_params.append(state['selected_subject'])
-    
-    # Publisher filter
-    if state['selected_publisher'] != 'All Publishers':
-        count_query += " AND publisher = ?"
-        where_params.append(state['selected_publisher'])
-    
-    cursor.execute(count_query, where_params)
-    state['total_books'] = cursor.fetchone()[0]
-    state['total_pages'] = max(1, (state['total_books'] + state['books_per_page'] - 1) // state['books_per_page'])
-    
-    # Ensure current page is valid
-    if state['current_page'] > state['total_pages']:
-        state['current_page'] = state['total_pages']
-    
-    # Get books for current page
-    offset = (state['current_page'] - 1) * state['books_per_page']
-    data_query = count_query.replace("COUNT(*)", "id, title, subject, publisher, year_of_publication")
-    data_query += f" ORDER BY title LIMIT {state['books_per_page']} OFFSET {offset}"
-    
-    cursor.execute(data_query, where_params)
-    books = cursor.fetchall()
-    conn.close()
-    
-    if not update_pagination_only:
-        # Clear loading and add books
-        books_container.clear_widgets()
-        
-        if books:
-            for book in books:
-                card = create_book_card(
-                    book,
-                    lambda book_id: show_edit_form(book_id, parent_instance, lambda: load_books_page(books_container, pagination_container, state, search_field, parent_instance)),
-                    lambda book_id: show_delete_confirmation(book_id, parent_instance, lambda: load_books_page(books_container, pagination_container, state, search_field, parent_instance)),
-                    lambda book_id: show_view_details(book_id, parent_instance)
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+
+        count_query = "SELECT COUNT(*) FROM books WHERE 1=1"
+        where_params = []
+
+        if search_field.text.strip():
+            search_term = f"%{search_field.text.strip()}%"
+            count_query += " AND (title LIKE ? OR subject LIKE ? OR publisher LIKE ? OR author LIKE ?)"
+            where_params.extend([search_term, search_term, search_term, search_term])
+
+        if state['selected_subject'] != 'All Subjects':
+            count_query += " AND subject = ?"
+            where_params.append(state['selected_subject'])
+
+        if state['selected_publisher'] != 'All Publishers':
+            count_query += " AND publisher = ?"
+            where_params.append(state['selected_publisher'])
+
+        cursor.execute(count_query, where_params)
+        total_books = cursor.fetchone()[0]
+        total_pages = max(1, (total_books + state['books_per_page'] - 1) // state['books_per_page'])
+        current_page = min(state['current_page'], total_pages)
+
+        offset = (current_page - 1) * state['books_per_page']
+        data_query = count_query.replace("COUNT(*)", "id, title, subject, publisher, year_of_publication")
+        data_query += f" ORDER BY title LIMIT {state['books_per_page']} OFFSET {offset}"
+
+        cursor.execute(data_query, where_params)
+        books = cursor.fetchall()
+        conn.close()
+        return total_books, total_pages, current_page, books
+
+    def on_success(result):
+        total_books, total_pages, current_page, books = result
+        state['total_books'] = total_books
+        state['total_pages'] = total_pages
+        state['current_page'] = current_page
+
+        if not update_pagination_only:
+            books_container.clear_widgets()
+
+            if books:
+                for book in books:
+                    card = create_book_card(
+                        book,
+                        lambda book_id: show_edit_form(book_id, parent_instance, lambda: load_books_page(books_container, pagination_container, state, search_field, parent_instance)),
+                        lambda book_id: show_delete_confirmation(book_id, parent_instance, lambda: load_books_page(books_container, pagination_container, state, search_field, parent_instance)),
+                        lambda book_id: show_view_details(book_id, parent_instance)
+                    )
+                    books_container.add_widget(card)
+            else:
+                no_results = MDLabel(
+                    text="No books found\nTry adjusting your search or filters",
+                    font_style='Body1',
+                    theme_text_color='Secondary',
+                    halign='center',
+                    size_hint_y=None,
+                    height=dp(100)
                 )
-                books_container.add_widget(card)
-        else:
-            # No results
-            no_results = MDLabel(
-                text="No books found\nTry adjusting your search or filters",
-                font_style='Body1',
-                theme_text_color='Secondary',
-                halign='center',
-                size_hint_y=None,
-                height=dp(100)
+                books_container.add_widget(no_results)
+
+        pagination_container.clear_widgets()
+        if state['total_pages'] > 1:
+            pagination = create_pagination_controls(
+                state['current_page'],
+                state['total_pages'],
+                lambda page: change_page(page, books_container, pagination_container, state, search_field, parent_instance)
             )
-            books_container.add_widget(no_results)
-    
-    # Update pagination
-    pagination_container.clear_widgets()
-    if state['total_pages'] > 1:
-        pagination = create_pagination_controls(
-            state['current_page'],
-            state['total_pages'],
-            lambda page: change_page(page, books_container, pagination_container, state, search_field, parent_instance)
-        )
-        pagination_container.add_widget(pagination)
+            pagination_container.add_widget(pagination)
+
+    def on_error(exc):
+        books_container.clear_widgets()
+        books_container.add_widget(MDLabel(
+            text=f"Failed to load books: {exc}",
+            font_style='Caption',
+            theme_text_color='Error',
+            halign='center',
+            size_hint_y=None,
+            height=dp(80)
+        ))
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Loading books...",
+        delay=0.5,
+    )
 
 
 def change_page(new_page, books_container, pagination_container, state, search_field, parent_instance):
@@ -945,33 +958,30 @@ def save_new_book(title, subject, author, publisher, year, pdf_link, dialog, ref
         error_dialog.open()
         return
     
-    # Insert into database
-    try:
-        conn = sqlite3.connect('library.db')
+    def worker():
+        conn = sqlite3.connect()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO books (title, subject, author, publisher, year_of_publication, pdf_link)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (title.strip(), subject.strip() or None, author.strip() or None, 
+        """, (title.strip(), subject.strip() or None, author.strip() or None,
               publisher.strip() or None, year or None, pdf_link.strip() or None))
         conn.commit()
         conn.close()
-        
+        return True
+
+    def on_success(_res):
         dialog.dismiss()
-        
-        # Success message
         success_dialog = MDDialog(
             title="Success",
             text=f"Book '{title}' added successfully!",
             buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
         )
         success_dialog.open()
-        
-        # Refresh list
         if refresh_callback:
             refresh_callback()
-    
-    except Exception as e:
+
+    def on_error(e):
         error_dialog = MDDialog(
             title="Database Error",
             text=f"Failed to add book: {str(e)}",
@@ -979,128 +989,139 @@ def save_new_book(title, subject, author, publisher, year, pdf_link, dialog, ref
         )
         error_dialog.open()
 
+    run_with_loading(
+        dialog,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Saving book...",
+        delay=0.5,
+    )
+
 
 def show_edit_form(book_id, parent_instance, refresh_callback):
     """Show edit book form"""
     
-    # Get book data
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT title, subject, author, publisher, year_of_publication, pdf_link
-        FROM books WHERE id = ?
-    """, (book_id,))
-    book = cursor.fetchone()
-    conn.close()
-    
-    if not book:
-        return
-    
-    title, subject, author, publisher, year, pdf_link = book
-    
-    # Create form container
-    form_container = BoxLayout(
-        orientation='vertical',
-        spacing=dp(15),
-        padding=dp(20),
-        size_hint_y=None
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT title, subject, author, publisher, year_of_publication, pdf_link
+            FROM books WHERE id = ?
+        """, (book_id,))
+        book = cursor.fetchone()
+        conn.close()
+        return book
+
+    def on_success(book):
+        if not book:
+            return
+
+        title, subject, author, publisher, year, pdf_link = book
+
+        form_container = BoxLayout(
+            orientation='vertical',
+            spacing=dp(15),
+            padding=dp(20),
+            size_hint_y=None
+        )
+        form_container.bind(minimum_height=form_container.setter('height'))
+
+        title_field = MDTextField(
+            hint_text="Title *",
+            text=title or '',
+            required=True,
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(50)
+        )
+        form_container.add_widget(title_field)
+
+        subject_field = MDTextField(
+            hint_text="Subject",
+            text=subject or '',
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(50)
+        )
+        form_container.add_widget(subject_field)
+
+        author_field = MDTextField(
+            hint_text="Author",
+            text=author or '',
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(50)
+        )
+        form_container.add_widget(author_field)
+
+        publisher_field = MDTextField(
+            hint_text="Publisher",
+            text=publisher or '',
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(50)
+        )
+        form_container.add_widget(publisher_field)
+
+        year_field = MDTextField(
+            hint_text="Year of Publication",
+            text=str(year) if year else '',
+            mode="rectangle",
+            input_filter="int",
+            size_hint_y=None,
+            height=dp(50)
+        )
+        form_container.add_widget(year_field)
+
+        pdf_field = MDTextField(
+            hint_text="PDF Link (URL)",
+            text=pdf_link or '',
+            mode="rectangle",
+            size_hint_y=None,
+            height=dp(50)
+        )
+        form_container.add_widget(pdf_field)
+
+        scroll = ScrollView(size_hint=(1, None), height=dp(400))
+        scroll.add_widget(form_container)
+
+        dialog = MDDialog(
+            title="Edit Book",
+            type="custom",
+            content_cls=scroll,
+            buttons=[
+                MDFlatButton(
+                    text="CANCEL",
+                    on_release=lambda x: dialog.dismiss()
+                ),
+                MDRaisedButton(
+                    text="UPDATE",
+                    md_bg_color=(0.30, 0.69, 0.31, 1),
+                    on_release=lambda x: update_book(
+                        book_id,
+                        title_field.text,
+                        subject_field.text,
+                        author_field.text,
+                        publisher_field.text,
+                        year_field.text,
+                        pdf_field.text,
+                        dialog,
+                        refresh_callback,
+                    ),
+                ),
+            ],
+        )
+        dialog.open()
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=lambda exc: None,
+        message="Loading book...",
+        delay=0.5,
     )
-    form_container.bind(minimum_height=form_container.setter('height'))
-    
-    # Title field
-    title_field = MDTextField(
-        hint_text="Title *",
-        text=title or '',
-        required=True,
-        mode="rectangle",
-        size_hint_y=None,
-        height=dp(50)
-    )
-    form_container.add_widget(title_field)
-    
-    # Subject field
-    subject_field = MDTextField(
-        hint_text="Subject",
-        text=subject or '',
-        mode="rectangle",
-        size_hint_y=None,
-        height=dp(50)
-    )
-    form_container.add_widget(subject_field)
-    
-    # Author field
-    author_field = MDTextField(
-        hint_text="Author",
-        text=author or '',
-        mode="rectangle",
-        size_hint_y=None,
-        height=dp(50)
-    )
-    form_container.add_widget(author_field)
-    
-    # Publisher field
-    publisher_field = MDTextField(
-        hint_text="Publisher",
-        text=publisher or '',
-        mode="rectangle",
-        size_hint_y=None,
-        height=dp(50)
-    )
-    form_container.add_widget(publisher_field)
-    
-    # Year field
-    year_field = MDTextField(
-        hint_text="Year of Publication",
-        text=str(year) if year else '',
-        mode="rectangle",
-        input_filter="int",
-        size_hint_y=None,
-        height=dp(50)
-    )
-    form_container.add_widget(year_field)
-    
-    # PDF Link field
-    pdf_field = MDTextField(
-        hint_text="PDF Link (URL)",
-        text=pdf_link or '',
-        mode="rectangle",
-        size_hint_y=None,
-        height=dp(50)
-    )
-    form_container.add_widget(pdf_field)
-    
-    # Scroll view for form
-    scroll = ScrollView(size_hint=(1, None), height=dp(400))
-    scroll.add_widget(form_container)
-    
-    # Dialog
-    dialog = MDDialog(
-        title=f"Edit Book",
-        type="custom",
-        content_cls=scroll,
-        buttons=[
-            MDFlatButton(
-                text="CANCEL",
-                on_release=lambda x: dialog.dismiss()
-            ),
-            MDRaisedButton(
-                text="UPDATE",
-                md_bg_color=(0.30, 0.69, 0.31, 1),
-                on_release=lambda x: update_book(
-                    book_id,
-                    title_field.text,
-                    subject_field.text,
-                    author_field.text,
-                    publisher_field.text,
-                    year_field.text,
-                    pdf_field.text,
-                    dialog,
-                    refresh_callback
-                )
-            ),
-        ],
-    )
-    dialog.open()
 
 
 def update_book(book_id, title, subject, author, publisher, year, pdf_link, dialog, refresh_callback):
@@ -1134,35 +1155,32 @@ def update_book(book_id, title, subject, author, publisher, year, pdf_link, dial
         error_dialog.open()
         return
     
-    # Update database
-    try:
-        conn = sqlite3.connect('library.db')
+    def worker():
+        conn = sqlite3.connect()
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE books 
-            SET title = ?, subject = ?, author = ?, publisher = ?, 
+            UPDATE books
+            SET title = ?, subject = ?, author = ?, publisher = ?,
                 year_of_publication = ?, pdf_link = ?
             WHERE id = ?
         """, (title.strip(), subject.strip() or None, author.strip() or None,
               publisher.strip() or None, year or None, pdf_link.strip() or None, book_id))
         conn.commit()
         conn.close()
-        
+        return True
+
+    def on_success(_res):
         dialog.dismiss()
-        
-        # Success message
         success_dialog = MDDialog(
             title="Success",
-            text=f"Book updated successfully!",
+            text="Book updated successfully!",
             buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
         )
         success_dialog.open()
-        
-        # Refresh list
         if refresh_callback:
             refresh_callback()
-    
-    except Exception as e:
+
+    def on_error(e):
         error_dialog = MDDialog(
             title="Database Error",
             text=f"Failed to update book: {str(e)}",
@@ -1170,38 +1188,47 @@ def update_book(book_id, title, subject, author, publisher, year, pdf_link, dial
         )
         error_dialog.open()
 
+    run_with_loading(
+        dialog,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Updating book...",
+        delay=0.5,
+    )
+
 
 def show_view_details(book_id, parent_instance):
     """Show book details in a modal"""
-    
-    # Get book data
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT title, subject, author, publisher, year_of_publication, pdf_link,
-               views, rating, rating_count
-        FROM books WHERE id = ?
-    """, (book_id,))
-    book = cursor.fetchone()
-    conn.close()
-    
-    if not book:
-        return
-    
-    title, subject, author, publisher, year, pdf_link, views, rating, rating_count = book
-    
-    # Create details container
-    details = BoxLayout(
-        orientation='vertical',
-        spacing=dp(10),
-        padding=dp(15),
-        size_hint_y=None
-    )
-    details.bind(minimum_height=details.setter('height'))
-    
-    # Add details
-    def add_detail(label, value):
-        if value:
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT title, subject, author, publisher, year_of_publication, pdf_link,
+                   views, rating, rating_count
+            FROM books WHERE id = ?
+        """, (book_id,))
+        book = cursor.fetchone()
+        conn.close()
+        return book
+
+    def on_success(book):
+        if not book:
+            return
+
+        title, subject, author, publisher, year, pdf_link, views, rating, rating_count = book
+
+        details = BoxLayout(
+            orientation='vertical',
+            spacing=dp(10),
+            padding=dp(15),
+            size_hint_y=None
+        )
+        details.bind(minimum_height=details.setter('height'))
+
+        def add_detail(label, value):
+            if value is None or value == "":
+                return
             row = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(40), spacing=dp(2))
             row.add_widget(MDLabel(
                 text=label,
@@ -1218,102 +1245,121 @@ def show_view_details(book_id, parent_instance):
                 height=dp(25)
             ))
             details.add_widget(row)
-    
-    add_detail("Title", title)
-    add_detail("Subject", subject)
-    add_detail("Author", author)
-    add_detail("Publisher", publisher)
-    add_detail("Year", year)
-    add_detail("Views", views or 0)
-    add_detail("Rating", f"{rating:.1f} ⭐ ({rating_count} ratings)" if rating and rating_count else "No ratings")
-    
-    if pdf_link:
-        details.add_widget(MDRaisedButton(
-            text="Open PDF Link",
-            md_bg_color=(0.13, 0.59, 0.95, 1),
-            size_hint_y=None,
-            height=dp(40),
-            on_release=lambda x: print(f"Open: {pdf_link}")  # TODO: Open in browser
-        ))
-    
-    # Scroll view
-    scroll = ScrollView(size_hint=(1, None), height=dp(400))
-    scroll.add_widget(details)
-    
-    # Dialog
-    dialog = MDDialog(
-        title="Book Details",
-        type="custom",
-        content_cls=scroll,
-        buttons=[
-            MDFlatButton(
-                text="CLOSE",
-                on_release=lambda x: dialog.dismiss()
-            ),
-        ],
+
+        add_detail("Title", title)
+        add_detail("Subject", subject)
+        add_detail("Author", author)
+        add_detail("Publisher", publisher)
+        add_detail("Year", year)
+        add_detail("Views", views or 0)
+        add_detail("Rating", f"{rating:.1f} ({rating_count} ratings)" if rating and rating_count else "No ratings")
+
+        if pdf_link:
+            details.add_widget(MDRaisedButton(
+                text="Open PDF Link",
+                md_bg_color=(0.13, 0.59, 0.95, 1),
+                size_hint_y=None,
+                height=dp(40),
+                on_release=lambda x: print(f"Open: {pdf_link}")
+            ))
+
+        scroll = ScrollView(size_hint=(1, None), height=dp(400))
+        scroll.add_widget(details)
+
+        dialog = MDDialog(
+            title="Book Details",
+            type="custom",
+            content_cls=scroll,
+            buttons=[
+                MDFlatButton(
+                    text="CLOSE",
+                    on_release=lambda x: dialog.dismiss()
+                ),
+            ],
+        )
+        dialog.open()
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=lambda exc: None,
+        message="Loading book details...",
+        delay=0.5,
     )
-    dialog.open()
 
 
 def show_delete_confirmation(book_id, parent_instance, refresh_callback):
     """Show delete confirmation dialog"""
     
-    # Get book title
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT title FROM books WHERE id = ?", (book_id,))
-    book = cursor.fetchone()
-    conn.close()
-    
-    if not book:
-        return
-    
-    title = book[0]
-    
-    def confirm_delete(dialog):
-        try:
-            conn = sqlite3.connect('library.db')
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM books WHERE id = ?", (book_id,))
-            conn.commit()
-            conn.close()
-            
-            dialog.dismiss()
-            
-            # Success message
-            success_dialog = MDDialog(
-                title="Success",
-                text=f"Book '{title}' deleted successfully!",
-                buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
+    def after_title(title):
+        def confirm_delete(dialog):
+            def worker():
+                conn = sqlite3.connect()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM books WHERE id = ?", (book_id,))
+                conn.commit()
+                conn.close()
+                return True
+
+            def on_success(_res):
+                dialog.dismiss()
+                success_dialog = MDDialog(
+                    title="Success",
+                    text=f"Book '{title}' deleted successfully!",
+                    buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
+                )
+                success_dialog.open()
+                if refresh_callback:
+                    refresh_callback()
+
+            def on_error(e):
+                error_dialog = MDDialog(
+                    title="Database Error",
+                    text=f"Failed to delete book: {str(e)}",
+                    buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
+                )
+                error_dialog.open()
+
+            run_with_loading(
+                parent_instance,
+                worker=worker,
+                on_success=on_success,
+                on_error=on_error,
+                message="Deleting book...",
+                delay=0.5,
             )
-            success_dialog.open()
-            
-            # Refresh list
-            if refresh_callback:
-                refresh_callback()
-        
-        except Exception as e:
-            error_dialog = MDDialog(
-                title="Database Error",
-                text=f"Failed to delete book: {str(e)}",
-                buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
-            )
-            error_dialog.open()
-    
-    # Confirmation dialog
-    dialog = MDDialog(
-        title="Confirm Delete",
-        text=f"Are you sure you want to delete:\n\n'{title}'?\n\nThis action cannot be undone.",
-        buttons=[
-            MDFlatButton(
-                text="CANCEL",
-                on_release=lambda x: dialog.dismiss()
-            ),
-            MDRaisedButton(
-                text="DELETE",
-                md_bg_color=(0.96, 0.26, 0.21, 1),
-                on_release=lambda x: confirm_delete(dialog)
-            ),
-        ],
+
+        dialog = MDDialog(
+            title="Confirm Delete",
+            text=f"Are you sure you want to delete:\n\n'{title}'?\n\nThis action cannot be undone.",
+            buttons=[
+                MDFlatButton(
+                    text="CANCEL",
+                    on_release=lambda x: dialog.dismiss()
+                ),
+                MDRaisedButton(
+                    text="DELETE",
+                    md_bg_color=(0.96, 0.26, 0.21, 1),
+                    on_release=lambda x: confirm_delete(dialog)
+                ),
+            ],
+        )
+        dialog.open()
+
+    def worker_title():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT title FROM books WHERE id = ?", (book_id,))
+        book = cursor.fetchone()
+        conn.close()
+        return book[0] if book else None
+
+    run_with_loading(
+        parent_instance,
+        worker=worker_title,
+        on_success=lambda title: after_title(title) if title else None,
+        on_error=lambda exc: None,
+        message="Loading book...",
+        delay=0.5,
     )
-    dialog.open()

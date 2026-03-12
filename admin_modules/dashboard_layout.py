@@ -869,7 +869,7 @@ def load_dashboard_content(content_scroll, navigate_callback):
     except Exception as e:
         print(f"Error loading dashboard: {e}")
         error_label = MDLabel(
-            text=f"⚠️ Error loading dashboard: {str(e)}",
+            text=f"Error loading dashboard: {str(e)}",
             theme_text_color='Error',
             size_hint_y=None,
             height=dp(40)

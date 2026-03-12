@@ -8,6 +8,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp
+from kivy.clock import Clock
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDIconButton, MDFlatButton
 from kivymd.uix.label import MDLabel, MDIcon
@@ -15,6 +16,7 @@ from user_modules.home_tab import load_home_tab
 from user_modules.browse_tab import load_browse_tab
 from user_modules.search_tab import load_search_tab
 from user_modules.profile_tab import load_profile_tab
+from utils import LoadingOverlay
 
 
 class UserDashboard(MDScreen):
@@ -23,6 +25,7 @@ class UserDashboard(MDScreen):
         self.user_id = user_id
         self.username = username
         self.current_tab = 'home'
+        self._tab_loader = None
         
         # Main layout
         main_layout = FloatLayout()
@@ -48,9 +51,8 @@ class UserDashboard(MDScreen):
         top_bar.bind(size=update_top_bar_bg, pos=update_top_bar_bg)
         
         # Library icon
-        library_icon = MDLabel(
-            text="📚",
-            font_style='H6',
+        library_icon = MDIcon(
+            icon='book-open-page-variant',
             theme_text_color='Custom',
             text_color=(1, 1, 1, 1),
             size_hint=(None, None),
@@ -208,19 +210,36 @@ class UserDashboard(MDScreen):
     
     def load_home(self):
         """Load home tab"""
-        load_home_tab(self.content_scroll, self)
+        self._load_tab_with_overlay("Loading home...", lambda: load_home_tab(self.content_scroll, self))
     
     def load_browse(self):
         """Load browse tab"""
-        load_browse_tab(self.content_scroll, self)
+        self._load_tab_with_overlay("Loading subjects...", lambda: load_browse_tab(self.content_scroll, self))
     
     def load_search(self):
         """Load search tab"""
-        load_search_tab(self.content_scroll, self)
+        self._load_tab_with_overlay("Loading search...", lambda: load_search_tab(self.content_scroll, self))
     
     def load_profile(self):
         """Load profile tab"""
-        load_profile_tab(self.content_scroll, self)
+        self._load_tab_with_overlay("Loading profile...", lambda: load_profile_tab(self.content_scroll, self))
+
+    def _load_tab_with_overlay(self, message, load_func):
+        """Show loading overlay during tab content rebuilds."""
+        if self._tab_loader is not None:
+            self._tab_loader.stop()
+        self._tab_loader = LoadingOverlay(message=message, delay=0)
+        self._tab_loader.start()
+
+        def do_load(_dt):
+            try:
+                load_func()
+            finally:
+                if self._tab_loader is not None:
+                    self._tab_loader.stop()
+
+        # Wait one extra render cycle so the overlay actually appears on screen.
+        Clock.schedule_once(do_load, 0.1)
     
     def logout(self, instance):
         """Logout user and return to login screen"""

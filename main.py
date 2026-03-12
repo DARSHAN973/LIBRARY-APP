@@ -14,6 +14,8 @@ from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp
+from kivy.clock import Clock
+import threading
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton
@@ -25,9 +27,10 @@ from database import Database
 from admin_modules.admin_dashboard import AdminDashboard
 from admin_modules.admin_auth import save_session
 from user_modules.user_dashboard import UserDashboard
+from utils import LoadingOverlay, run_with_loading
 
 # Set window size for testing (comment out for mobile deployment)
-# Window.size = (360, 640)
+Window.size = (360, 640)
 
 
 class LoginScreen(MDScreen):
@@ -38,6 +41,7 @@ class LoginScreen(MDScreen):
         self.name = 'login'
         self.db = Database()
         self.current_mode = 'user_login'  # user_login, user_signup, admin_login
+        self.startup_loader = None
         
         # Main scrollable layout
         scroll = ScrollView()
@@ -92,7 +96,7 @@ class LoginScreen(MDScreen):
         
         # App name with modern styling
         app_name = MDLabel(
-            text="📚 Digital Library",
+            text="Digital Library",
             font_style='H4',
             halign='center',
             bold=True,
@@ -211,7 +215,7 @@ class LoginScreen(MDScreen):
         )
         
         subtitle = MDLabel(
-            text="Welcome Back! 👋",
+            text="Welcome Back",
             font_style='H6',
             halign='center',
             bold=True,
@@ -223,7 +227,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(subtitle)
         
         self.username_field = MDTextField(
-            hint_text="👤 Username",
+            hint_text="Username",
             size_hint_y=None,
             height=dp(56),
             mode="rectangle"
@@ -231,7 +235,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(self.username_field)
         
         self.password_field = MDTextField(
-            hint_text="🔒 Password",
+            hint_text="Password",
             password=True,
             size_hint_y=None,
             height=dp(56),
@@ -287,7 +291,7 @@ class LoginScreen(MDScreen):
         )
         
         subtitle = MDLabel(
-            text="Create Your Account 🎉",
+            text="Create Your Account",
             font_style='H6',
             halign='center',
             bold=True,
@@ -299,7 +303,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(subtitle)
         
         self.signup_username_field = MDTextField(
-            hint_text="👤 Username",
+            hint_text="Username",
             size_hint_y=None,
             height=dp(56),
             mode="rectangle"
@@ -307,7 +311,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(self.signup_username_field)
         
         self.signup_email_field = MDTextField(
-            hint_text="📧 Email (optional)",
+            hint_text="Email (optional)",
             size_hint_y=None,
             height=dp(56),
             mode="rectangle"
@@ -315,7 +319,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(self.signup_email_field)
         
         self.signup_phone_field = MDTextField(
-            hint_text="📱 Phone (optional)",
+            hint_text="Phone (optional)",
             size_hint_y=None,
             height=dp(56),
             mode="rectangle"
@@ -323,7 +327,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(self.signup_phone_field)
         
         self.signup_password_field = MDTextField(
-            hint_text="🔒 Password",
+            hint_text="Password",
             password=True,
             size_hint_y=None,
             height=dp(56),
@@ -332,7 +336,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(self.signup_password_field)
         
         self.signup_confirm_password_field = MDTextField(
-            hint_text="🔐 Confirm Password",
+            hint_text="Confirm Password",
             password=True,
             size_hint_y=None,
             height=dp(56),
@@ -388,7 +392,7 @@ class LoginScreen(MDScreen):
         )
         
         subtitle = MDLabel(
-            text="Admin Access 🔒",
+            text="Admin Access",
             font_style='H6',
             halign='center',
             bold=True,
@@ -400,7 +404,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(subtitle)
         
         info_label = MDLabel(
-            text="⚠️ Authorized Personnel Only",
+            text="Authorized Personnel Only",
             font_style='Caption',
             halign='center',
             theme_text_color='Custom',
@@ -411,7 +415,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(info_label)
         
         self.admin_username_field = MDTextField(
-            hint_text="🛡️ Admin ID",
+            hint_text="Admin ID",
             size_hint_y=None,
             height=dp(56),
             mode="rectangle"
@@ -419,7 +423,7 @@ class LoginScreen(MDScreen):
         form_card.add_widget(self.admin_username_field)
         
         self.admin_password_field = MDTextField(
-            hint_text="🔒 Admin Password",
+            hint_text="Admin Password",
             password=True,
             size_hint_y=None,
             height=dp(56),
@@ -457,22 +461,36 @@ class LoginScreen(MDScreen):
             self.show_error("Please enter both username and password")
             return
         
-        # Verify user and get user ID
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        password_hash = self.db.hash_password(password)
-        cursor.execute(
-            'SELECT id, username FROM users WHERE username = ? AND password_hash = ?',
-            (username, password_hash)
+        def worker():
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            password_hash = self.db.hash_password(password)
+            cursor.execute(
+                'SELECT id, username FROM users WHERE username = ? AND password_hash = ?',
+                (username, password_hash)
+            )
+            result = cursor.fetchone()
+            conn.close()
+            return result
+
+        def on_success(result):
+            if result:
+                user_id, logged_username = result
+                self.show_success_dialog(logged_username, "User", user_id)
+            else:
+                self.show_error("Invalid username or password")
+
+        def on_error(_exc):
+            self.show_error("Login failed. Please try again")
+
+        run_with_loading(
+            self,
+            worker=worker,
+            on_success=on_success,
+            on_error=on_error,
+            message="Signing in...",
+            delay=0.5,
         )
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            user_id, username = result
-            self.show_success_dialog(username, "User", user_id)
-        else:
-            self.show_error("Invalid username or password")
             
     def user_signup(self, instance):
         """Handle user signup"""
@@ -494,23 +512,25 @@ class LoginScreen(MDScreen):
             self.show_error("Password must be at least 6 characters")
             return
         
-        # Create user and get ID
-        conn = self.db.connect()
-        cursor = conn.cursor()
-        try:
-            password_hash = self.db.hash_password(password)
-            cursor.execute(
-                'INSERT INTO users (username, password_hash, email, phone) VALUES (?, ?, ?, ?)',
-                (username, password_hash, email or None, phone or None)
-            )
-            conn.commit()
-            user_id = cursor.lastrowid
-            conn.close()
-            
-            # Auto-login after successful signup
+        def worker():
+            conn = self.db.connect()
+            cursor = conn.cursor()
+            try:
+                password_hash = self.db.hash_password(password)
+                cursor.execute(
+                    'INSERT INTO users (username, password_hash, email, phone) VALUES (?, ?, ?, ?)',
+                    (username, password_hash, email or None, phone or None)
+                )
+                conn.commit()
+                user_id = cursor.lastrowid
+                return user_id
+            finally:
+                conn.close()
+
+        def on_success(user_id):
             dialog = MDDialog(
-                title="Success!",
-                text=f"Account created successfully! Welcome, {username}!",
+                title="Success",
+                text=f"Account created successfully. Welcome, {username}",
                 buttons=[
                     MDFlatButton(
                         text="Continue",
@@ -519,9 +539,18 @@ class LoginScreen(MDScreen):
                 ]
             )
             dialog.open()
-        except Exception as e:
-            conn.close()
-            self.show_error("Username already exists")
+
+        def on_error(_exc):
+            self.show_error("Username already exists or signup failed")
+
+        run_with_loading(
+            self,
+            worker=worker,
+            on_success=on_success,
+            on_error=on_error,
+            message="Creating account...",
+            delay=0.5,
+        )
             
     def admin_login(self, instance):
         """Handle admin login"""
@@ -532,12 +561,28 @@ class LoginScreen(MDScreen):
             self.show_error("Please enter both admin ID and password")
             return
             
-        if self.db.verify_admin(username, password):
-            # Save session
-            save_session(1, username)
-            self.show_success_dialog(username, "Admin")
-        else:
-            self.show_error("Invalid admin credentials")
+        def worker():
+            is_valid = self.db.verify_admin(username, password)
+            return is_valid
+
+        def on_success(is_valid):
+            if is_valid:
+                save_session(1, username)
+                self.show_success_dialog(username, "Admin")
+            else:
+                self.show_error("Invalid admin credentials")
+
+        def on_error(_exc):
+            self.show_error("Admin login failed. Please try again")
+
+        run_with_loading(
+            self,
+            worker=worker,
+            on_success=on_success,
+            on_error=on_error,
+            message="Verifying admin...",
+            delay=0.5,
+        )
             
     def show_error(self, message):
         """Display error message"""
@@ -582,10 +627,8 @@ class LoginScreen(MDScreen):
         )
         icon_box.add_widget(BoxLayout())  # Spacer
         
-        success_icon = MDLabel(
-            text="✓",
-            font_style='H1',
-            halign='center',
+        success_icon = MDIcon(
+            icon='check-circle',
             theme_text_color='Custom',
             text_color=(0.3, 0.8, 0.3, 1),
             size_hint=(None, None),
@@ -610,7 +653,7 @@ class LoginScreen(MDScreen):
         
         # Welcome Message
         welcome_msg = MDLabel(
-            text=f"Welcome back, {username}! 🎉",
+            text=f"Welcome back, {username}!",
             font_style='Body1',
             halign='center',
             theme_text_color='Custom',
@@ -639,16 +682,31 @@ class LoginScreen(MDScreen):
             height=dp(52),
             md_bg_color=(0.13, 0.59, 0.95, 1),
             elevation=3,
-            on_release=lambda x: (modal.dismiss(), self.go_to_dashboard(user_type, username, user_id))
+            on_release=lambda x: self._continue_with_loading(modal, user_type, username, user_id)
         )
         modal_content.add_widget(continue_btn)
         
         modal.add_widget(modal_content)
         modal.open()
+
+    def _continue_with_loading(self, modal, user_type, username, user_id=None):
+        """Close success modal and show centered loading before dashboard navigation."""
+        modal.dismiss()
+        nav_loader = LoadingOverlay(message="Loading...", delay=0)
+        nav_loader.start()
+
+        def do_nav(_dt):
+            try:
+                self.go_to_dashboard(user_type, username, user_id)
+            finally:
+                nav_loader.stop()
+
+        # Let overlay render before heavy screen build starts.
+        Clock.schedule_once(do_nav, 0)
         
     def go_to_dashboard(self, user_type, username, user_id=None):
         """Navigate to appropriate dashboard"""
-        print(f"✓ Navigating to {user_type} dashboard for {username}...")
+        print(f"Navigating to {user_type} dashboard for {username}...")
         
         if user_type == 'Admin':
             self.manager.get_screen('admin_dashboard').set_admin_name(username)
@@ -666,6 +724,18 @@ class LoginScreen(MDScreen):
                 user_dash.load_home()
             
             self.manager.current = 'user_dashboard'
+
+    def show_startup_loading(self, message="Connecting to server..."):
+        """Show startup loader while remote setup is running."""
+        if self.startup_loader is None:
+            self.startup_loader = LoadingOverlay(message=message, delay=0)
+        self.startup_loader.message = message
+        self.startup_loader.start()
+
+    def hide_startup_loading(self):
+        """Hide startup loader."""
+        if self.startup_loader is not None:
+            self.startup_loader.stop()
 
 class LibraryApp(MDApp):
     """Main Application Class"""
@@ -685,11 +755,32 @@ class LibraryApp(MDApp):
         
     def on_start(self):
         """Initialize database on app start"""
-        print("🚀 Library Mobile App Started")
-        db = Database()
-        db.create_tables()
-        # Create default admin if not exists
-        db.create_admin('admin', 'admin123', 'admin@library.com')
+        print("Library Mobile App Started")
+        try:
+            self.root.get_screen('login').show_startup_loading("Loading...")
+        except Exception:
+            pass
+        # Avoid blocking UI while remote DB initializes.
+        threading.Thread(target=self._initialize_database, daemon=True).start()
+
+    def _initialize_database(self):
+        """Run DB setup in the background to keep app startup responsive."""
+        try:
+            db = Database()
+            db.create_tables()
+            # Create default admin if not exists
+            db.create_admin('admin', 'admin123', 'admin@library.com')
+            print("Background database initialization complete")
+        except Exception as exc:
+            print(f"Database initialization failed: {exc}")
+        finally:
+            def hide_loader(_dt):
+                try:
+                    self.root.get_screen('login').hide_startup_loading()
+                except Exception:
+                    pass
+
+            Clock.schedule_once(hide_loader, 0)
 
 
 if __name__ == '__main__':

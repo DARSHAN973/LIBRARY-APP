@@ -423,7 +423,7 @@ def load_admin_auth_content(content_scroll, parent_instance):
     security_footer.add_widget(sec_header)
     
     security_footer.add_widget(MDLabel(
-        text="🔒 Passwords hashed with SHA256",
+        text="Passwords hashed with SHA256",
         font_style='Caption',
         theme_text_color='Secondary',
         size_hint_y=None,
@@ -431,7 +431,7 @@ def load_admin_auth_content(content_scroll, parent_instance):
     ))
     
     security_footer.add_widget(MDLabel(
-        text="🔐 Secure session management",
+        text="Secure session management",
         font_style='Caption',
         theme_text_color='Secondary',
         size_hint_y=None,
@@ -506,25 +506,25 @@ def create_change_password_dialog(parent_instance):
     def change_password(instance):
         # Validation
         if not current_pass.text or not new_pass.text or not confirm_pass.text:
-            error_label.text = "⚠️ All fields are required"
+            error_label.text = "All fields are required"
             return
         
         if new_pass.text != confirm_pass.text:
-            error_label.text = "⚠️ Passwords don't match"
+            error_label.text = "Passwords don't match"
             return
         
         if len(new_pass.text) < 6:
-            error_label.text = "⚠️ Min 6 characters required"
+            error_label.text = "Min 6 characters required"
             return
         
         # Verify current password
-        conn = sqlite3.connect('library.db')
+        conn = sqlite3.connect()
         cursor = conn.cursor()
         cursor.execute("SELECT password_hash FROM users WHERE id = 1")
         admin = cursor.fetchone()
         
         if not admin or not (hashlib.sha256(current_pass.text.encode('utf-8')).hexdigest() == admin[0]):
-            error_label.text = "⚠️ Current password incorrect"
+            error_label.text = "Current password incorrect"
             conn.close()
             return
         

@@ -18,7 +18,7 @@ from kivymd.uix.card import MDCard
 import sqlite3
 import json
 import os
-from utils import open_url_safely
+from utils import open_url_safely, run_with_loading
 
 
 def load_recent_searches():
@@ -82,9 +82,8 @@ def load_search_tab(content_scroll, parent_instance):
         spacing=dp(8)
     )
     
-    title_icon = MDLabel(
-        text="🔍",
-        font_style='H5',
+    title_icon = MDIcon(
+        icon='magnify',
         theme_text_color='Custom',
         text_color=(0.13, 0.59, 0.95, 1),
         size_hint=(None, None),
@@ -336,7 +335,7 @@ def load_search_tab(content_scroll, parent_instance):
         def do_search(dt):
             suggestions_container.clear_widgets()
             
-            conn = sqlite3.connect('library.db')
+            conn = sqlite3.connect()
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT DISTINCT id, title, author
@@ -476,286 +475,315 @@ def load_search_tab(content_scroll, parent_instance):
         
         # Save to recent searches (but don't show them)
         save_recent_search(query)
-        
-        # Search in database
-        conn = sqlite3.connect('library.db')
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, title, subject, author, year_of_publication 
-            FROM books 
-            WHERE title LIKE ? OR subject LIKE ? OR author LIKE ?
-            LIMIT 20
-        """, (f'%{query}%', f'%{query}%', f'%{query}%'))
-        books = cursor.fetchall()
-        conn.close()
-        
-        if books:
+
+        def worker():
+            conn = sqlite3.connect()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, title, subject, author, year_of_publication
+                FROM books
+                WHERE title LIKE ? OR subject LIKE ? OR author LIKE ?
+                LIMIT 20
+            """, (f'%{query}%', f'%{query}%', f'%{query}%'))
+            books = cursor.fetchall()
+            conn.close()
+            return books
+
+        def on_success(books):
+            if books:
             # Show Results - Modern Cards
-            for book_id, title, subject, author, year in books:
-                book_card = BoxLayout(
-                    orientation='vertical',
-                    size_hint_y=None,
-                    height=dp(140),
-                    padding=dp(18),
-                    spacing=dp(12)
-                )
-                
-                with book_card.canvas.before:
-                    Color(1, 1, 1, 1)
-                    book_card.bg = RoundedRectangle(
-                        size=book_card.size,
-                        pos=book_card.pos,
-                        radius=[dp(14)]
+                for book_id, title, subject, author, year in books:
+                    book_card = BoxLayout(
+                        orientation='vertical',
+                        size_hint_y=None,
+                        height=dp(140),
+                        padding=dp(18),
+                        spacing=dp(12)
                     )
-                    Color(0.13, 0.59, 0.95, 0.1)
-                    book_card.accent = Line(
-                        rounded_rectangle=(
-                            book_card.x, book_card.y,
-                            book_card.width, book_card.height,
-                            dp(14)
+                
+                    with book_card.canvas.before:
+                        Color(1, 1, 1, 1)
+                        book_card.bg = RoundedRectangle(
+                            size=book_card.size,
+                            pos=book_card.pos,
+                            radius=[dp(14)]
+                        )
+                        Color(0.13, 0.59, 0.95, 0.1)
+                        book_card.accent = Line(
+                            rounded_rectangle=(
+                                book_card.x, book_card.y,
+                                book_card.width, book_card.height,
+                                dp(14)
+                            ),
+                            width=2
+                        )
+                
+                    book_card.bind(
+                        size=lambda inst, val, bg=book_card: (
+                            setattr(bg.bg, 'size', inst.size),
+                            setattr(bg.accent, 'rounded_rectangle', (
+                                inst.x, inst.y, inst.width, inst.height, dp(14)
+                            ))
                         ),
-                        width=2
+                        pos=lambda inst, val, bg=book_card: (
+                            setattr(bg.bg, 'pos', inst.pos),
+                            setattr(bg.accent, 'rounded_rectangle', (
+                                inst.x, inst.y, inst.width, inst.height, dp(14)
+                            ))
+                        )
                     )
                 
-                book_card.bind(
-                    size=lambda inst, val, bg=book_card: (
-                        setattr(bg.bg, 'size', inst.size),
-                        setattr(bg.accent, 'rounded_rectangle', (
-                            inst.x, inst.y, inst.width, inst.height, dp(14)
-                        ))
-                    ),
-                    pos=lambda inst, val, bg=book_card: (
-                        setattr(bg.bg, 'pos', inst.pos),
-                        setattr(bg.accent, 'rounded_rectangle', (
-                            inst.x, inst.y, inst.width, inst.height, dp(14)
-                        ))
+                    # Book Info
+                    info_section = BoxLayout(
+                        orientation='vertical',
+                        size_hint_y=None,
+                        height=dp(75),
+                        spacing=dp(6)
                     )
-                )
                 
-                # Book Info
-                info_section = BoxLayout(
-                    orientation='vertical',
-                    size_hint_y=None,
-                    height=dp(75),
-                    spacing=dp(6)
-                )
+                    # Title
+                    title_label = MDLabel(
+                        text=title[:55] + ('...' if len(title) > 55 else ''),
+                        font_style='Subtitle1',
+                        bold=True,
+                        theme_text_color='Custom',
+                        text_color=(0.15, 0.15, 0.15, 1),
+                        size_hint_y=None,
+                        height=dp(26)
+                    )
+                    info_section.add_widget(title_label)
                 
-                # Title
-                title_label = MDLabel(
-                    text=title[:55] + ('...' if len(title) > 55 else ''),
-                    font_style='Subtitle1',
-                    bold=True,
-                    theme_text_color='Custom',
-                    text_color=(0.15, 0.15, 0.15, 1),
-                    size_hint_y=None,
-                    height=dp(26)
-                )
-                info_section.add_widget(title_label)
+                    # Author
+                    if author:
+                        author_label = MDLabel(
+                            text=f"Author: {author[:40]}" + ('...' if len(author) > 40 else ''),
+                            font_style='Body2',
+                            theme_text_color='Custom',
+                            text_color=(0.4, 0.4, 0.4, 1),
+                            size_hint_y=None,
+                            height=dp(22)
+                        )
+                        info_section.add_widget(author_label)
                 
-                # Author
-                if author:
-                    author_label = MDLabel(
-                        text=f"✍️ {author[:40]}" + ('...' if len(author) > 40 else ''),
-                        font_style='Body2',
+                    # Subject and Year
+                    meta_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(22),
+                        spacing=dp(15)
+                    )
+                
+                    if subject:
+                        subject_label = MDLabel(
+                            text=f"Subject: {subject[:25]}" + ('...' if len(subject or '') > 25 else ''),
+                            font_style='Caption',
+                            theme_text_color='Custom',
+                            text_color=(0.5, 0.5, 0.5, 1),
+                            size_hint_x=0.6
+                        )
+                        meta_box.add_widget(subject_label)
+                
+                    if year:
+                        year_label = MDLabel(
+                            text=f"Year: {year}",
+                            font_style='Caption',
+                            theme_text_color='Custom',
+                            text_color=(0.5, 0.5, 0.5, 1),
+                            size_hint_x=0.4
+                        )
+                        meta_box.add_widget(year_label)
+                
+                    info_section.add_widget(meta_box)
+                    book_card.add_widget(info_section)
+                
+                    # Action Button
+                    view_btn = MDRaisedButton(
+                        text="VIEW DETAILS",
+                        size_hint=(1, None),
+                        height=dp(42),
+                        md_bg_color=(0.13, 0.59, 0.95, 1),
+                        elevation=0
+                    )
+                
+                    def make_view_handler(bid=book_id):
+                        def handler(instance):
+                            show_book_details(parent_instance, bid)
+                        return handler
+                
+                    view_btn.bind(on_release=make_view_handler())
+                    book_card.add_widget(view_btn)
+                    results_container.add_widget(book_card)
+            else:
+                # NOT FOUND - Show Popup Dialog
+                def show_not_found_popup():
+                    popup = ModalView(
+                        size_hint=(0.85, None),
+                        height=dp(320),
+                        background='',
+                        background_color=(0, 0, 0, 0),
+                        overlay_color=(0, 0, 0, 0.6)
+                    )
+
+                    popup_content = BoxLayout(
+                        orientation='vertical',
+                        padding=dp(25),
+                        spacing=dp(20)
+                    )
+
+                    with popup_content.canvas.before:
+                        Color(1, 1, 1, 1)
+                        popup_content.bg = RoundedRectangle(
+                            size=popup_content.size,
+                            pos=popup_content.pos,
+                            radius=[dp(20)]
+                        )
+
+                    popup_content.bind(
+                        size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
+                        pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
+                    )
+
+                    # Close button (X)
+                    close_btn_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(30)
+                    )
+                    close_btn_box.add_widget(BoxLayout())  # Spacer
+
+                    close_btn = MDIconButton(
+                        icon='close-circle',
+                        theme_text_color='Custom',
+                        text_color=(0.5, 0.5, 0.5, 1),
+                        size_hint=(None, None),
+                        size=(dp(32), dp(32)),
+                        on_release=lambda x: popup.dismiss()
+                    )
+                    close_btn_box.add_widget(close_btn)
+                    popup_content.add_widget(close_btn_box)
+
+                    # Icon
+                    icon_box = BoxLayout(
+                        size_hint_y=None,
+                        height=dp(60)
+                    )
+                    icon_box.add_widget(BoxLayout())
+                    not_found_icon = MDIcon(
+                        icon='book-alert',
+                        theme_text_color='Custom',
+                        text_color=(0.96, 0.26, 0.21, 1),
+                        size_hint=(None, None),
+                        size=(dp(60), dp(60))
+                    )
+                    icon_box.add_widget(not_found_icon)
+                    icon_box.add_widget(BoxLayout())
+                    popup_content.add_widget(icon_box)
+
+                    # Title
+                    popup_content.add_widget(MDLabel(
+                        text="No Results Found",
+                        font_style='H5',
+                        bold=True,
+                        halign='center',
+                        theme_text_color='Custom',
+                        text_color=(0.2, 0.2, 0.2, 1),
+                        size_hint_y=None,
+                        height=dp(35)
+                    ))
+
+                    # Query display
+                    popup_content.add_widget(MDLabel(
+                        text=f'"{query[:40]}..."' if len(query) > 40 else f'"{query}"',
+                        font_style='Body1',
+                        halign='center',
                         theme_text_color='Custom',
                         text_color=(0.4, 0.4, 0.4, 1),
                         size_hint_y=None,
-                        height=dp(22)
-                    )
-                    info_section.add_widget(author_label)
-                
-                # Subject and Year
-                meta_box = BoxLayout(
-                    orientation='horizontal',
-                    size_hint_y=None,
-                    height=dp(22),
-                    spacing=dp(15)
-                )
-                
-                if subject:
-                    subject_label = MDLabel(
-                        text=f"📚 {subject[:25]}" + ('...' if len(subject or '') > 25 else ''),
-                        font_style='Caption',
+                        height=dp(25)
+                    ))
+
+                    # Description
+                    popup_content.add_widget(MDLabel(
+                        text="This book is not in our library.\nWould you like to search the web?",
+                        font_style='Body2',
+                        halign='center',
                         theme_text_color='Custom',
                         text_color=(0.5, 0.5, 0.5, 1),
-                        size_hint_x=0.6
+                        size_hint_y=None,
+                        height=dp(40)
+                    ))
+
+                    # Buttons
+                    btn_box = BoxLayout(
+                        orientation='horizontal',
+                        size_hint_y=None,
+                        height=dp(50),
+                        spacing=dp(12),
+                        padding=[dp(10), 0]
                     )
-                    meta_box.add_widget(subject_label)
-                
-                if year:
-                    year_label = MDLabel(
-                        text=f"📅 {year}",
-                        font_style='Caption',
+
+                    # Close Button
+                    cancel_btn = MDRaisedButton(
+                        text="CANCEL",
+                        size_hint=(0.45, None),
+                        height=dp(50),
+                        md_bg_color=(0.9, 0.9, 0.9, 1),
                         theme_text_color='Custom',
-                        text_color=(0.5, 0.5, 0.5, 1),
-                        size_hint_x=0.4
+                        text_color=(0.3, 0.3, 0.3, 1),
+                        elevation=0,
+                        on_release=lambda x: popup.dismiss()
                     )
-                    meta_box.add_widget(year_label)
-                
-                info_section.add_widget(meta_box)
-                book_card.add_widget(info_section)
-                
-                # Action Button
-                view_btn = MDRaisedButton(
-                    text="VIEW DETAILS",
-                    size_hint=(1, None),
-                    height=dp(42),
-                    md_bg_color=(0.13, 0.59, 0.95, 1),
-                    elevation=0
-                )
-                
-                def make_view_handler(bid=book_id):
-                    def handler(instance):
-                        show_book_details(parent_instance, bid)
-                    return handler
-                
-                view_btn.bind(on_release=make_view_handler())
-                book_card.add_widget(view_btn)
-                results_container.add_widget(book_card)
-        else:
-            # NOT FOUND - Show Popup Dialog
-            def show_not_found_popup():
-                popup = ModalView(
-                    size_hint=(0.85, None),
-                    height=dp(320),
-                    background='',
-                    background_color=(0, 0, 0, 0),
-                    overlay_color=(0, 0, 0, 0.6)
-                )
-                
-                popup_content = BoxLayout(
-                    orientation='vertical',
-                    padding=dp(25),
-                    spacing=dp(20)
-                )
-                
-                with popup_content.canvas.before:
-                    Color(1, 1, 1, 1)
-                    popup_content.bg = RoundedRectangle(
-                        size=popup_content.size,
-                        pos=popup_content.pos,
-                        radius=[dp(20)]
+                    btn_box.add_widget(cancel_btn)
+
+                    # Web Search Button
+                    def open_browser_and_close(instance):
+                        search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+                        open_url_safely(search_url)
+                        popup.dismiss()
+
+                    web_btn = MDRaisedButton(
+                        text="SEARCH WEB",
+                        size_hint=(0.55, None),
+                        height=dp(50),
+                        md_bg_color=(0.13, 0.59, 0.95, 1),
+                        elevation=2,
+                        on_release=open_browser_and_close
                     )
-                
-                popup_content.bind(
-                    size=lambda inst, val: setattr(inst.bg, 'size', inst.size),
-                    pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos)
-                )
-                
-                # Close button (X)
-                close_btn_box = BoxLayout(
-                    orientation='horizontal',
-                    size_hint_y=None,
-                    height=dp(30)
-                )
-                close_btn_box.add_widget(BoxLayout())  # Spacer
-                
-                close_btn = MDIconButton(
-                    icon='close-circle',
-                    theme_text_color='Custom',
-                    text_color=(0.5, 0.5, 0.5, 1),
-                    size_hint=(None, None),
-                    size=(dp(32), dp(32)),
-                    on_release=lambda x: popup.dismiss()
-                )
-                close_btn_box.add_widget(close_btn)
-                popup_content.add_widget(close_btn_box)
-                
-                # Icon
-                icon_box = BoxLayout(
-                    size_hint_y=None,
-                    height=dp(60)
-                )
-                icon_box.add_widget(BoxLayout())
-                not_found_icon = MDIcon(
-                    icon='book-alert',
-                    theme_text_color='Custom',
-                    text_color=(0.96, 0.26, 0.21, 1),
-                    size_hint=(None, None),
-                    size=(dp(60), dp(60))
-                )
-                icon_box.add_widget(not_found_icon)
-                icon_box.add_widget(BoxLayout())
-                popup_content.add_widget(icon_box)
-                
-                # Title
-                popup_content.add_widget(MDLabel(
-                    text="No Results Found",
-                    font_style='H5',
-                    bold=True,
-                    halign='center',
-                    theme_text_color='Custom',
-                    text_color=(0.2, 0.2, 0.2, 1),
-                    size_hint_y=None,
-                    height=dp(35)
-                ))
-                
-                # Query display
-                popup_content.add_widget(MDLabel(
-                    text=f'"{query[:40]}..."' if len(query) > 40 else f'"{query}"',
-                    font_style='Body1',
-                    halign='center',
-                    theme_text_color='Custom',
-                    text_color=(0.4, 0.4, 0.4, 1),
-                    size_hint_y=None,
-                    height=dp(25)
-                ))
-                
-                # Description
-                popup_content.add_widget(MDLabel(
-                    text="This book is not in our library.\nWould you like to search the web?",
-                    font_style='Body2',
-                    halign='center',
-                    theme_text_color='Custom',
-                    text_color=(0.5, 0.5, 0.5, 1),
-                    size_hint_y=None,
-                    height=dp(40)
-                ))
-                
-                # Buttons
-                btn_box = BoxLayout(
-                    orientation='horizontal',
-                    size_hint_y=None,
-                    height=dp(50),
-                    spacing=dp(12),
-                    padding=[dp(10), 0]
-                )
-                
-                # Close Button
-                cancel_btn = MDRaisedButton(
-                    text="CANCEL",
-                    size_hint=(0.45, None),
-                    height=dp(50),
-                    md_bg_color=(0.9, 0.9, 0.9, 1),
-                    theme_text_color='Custom',
-                    text_color=(0.3, 0.3, 0.3, 1),
-                    elevation=0,
-                    on_release=lambda x: popup.dismiss()
-                )
-                btn_box.add_widget(cancel_btn)
-                
-                # Web Search Button
-                def open_browser_and_close(instance):
-                    search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-                    open_url_safely(search_url)
-                    popup.dismiss()
-                
-                web_btn = MDRaisedButton(
-                    text="🌐 SEARCH WEB",
-                    size_hint=(0.55, None),
-                    height=dp(50),
-                    md_bg_color=(0.13, 0.59, 0.95, 1),
-                    elevation=2,
-                    on_release=open_browser_and_close
-                )
-                btn_box.add_widget(web_btn)
-                
-                popup_content.add_widget(btn_box)
-                popup.add_widget(popup_content)
-                popup.open()
+                    btn_box.add_widget(web_btn)
+
+                    popup_content.add_widget(btn_box)
+                    popup.add_widget(popup_content)
+                    popup.open()
             
-            # Show the popup
-            show_not_found_popup()
+                # Show the popup
+                show_not_found_popup()
+
+        def on_error(_exc):
+            popup = ModalView(
+                size_hint=(0.85, None),
+                height=dp(180),
+                background='',
+                background_color=(0, 0, 0, 0),
+                overlay_color=(0, 0, 0, 0.6)
+            )
+            box = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(12))
+            with box.canvas.before:
+                Color(1, 1, 1, 1)
+                box.bg = RoundedRectangle(size=box.size, pos=box.pos, radius=[dp(16)])
+            box.bind(size=lambda inst, val: setattr(inst.bg, 'size', inst.size), pos=lambda inst, val: setattr(inst.bg, 'pos', inst.pos))
+            box.add_widget(MDLabel(text="Search failed. Please try again.", halign='center'))
+            box.add_widget(MDRaisedButton(text="OK", on_release=lambda x: popup.dismiss()))
+            popup.add_widget(box)
+            popup.open()
+
+        run_with_loading(
+            parent_instance,
+            worker=worker,
+            on_success=on_success,
+            on_error=on_error,
+            message="Searching books...",
+            delay=0.5,
+        )
     
     search_field.bind(on_text_validate=search_books)
     

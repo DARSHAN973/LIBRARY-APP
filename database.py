@@ -10,15 +10,14 @@ from datetime import datetime
 
 
 class Database:
-    def __init__(self, db_name='library.db'):
+    def __init__(self):
         """Initialize database connection"""
-        self.db_name = db_name
         self.conn = None
         self.cursor = None
         
     def connect(self):
-        """Connect to SQLite database"""
-        self.conn = sqlite3.connect(self.db_name)
+        """Connect using the configured remote database connection."""
+        self.conn = sqlite3.connect()
         self.cursor = self.conn.cursor()
         return self.conn
         
@@ -76,9 +75,22 @@ class Database:
                 pdf_link TEXT,
                 thumbnail_link TEXT,
                 views INTEGER DEFAULT 0,
+                downloads INTEGER DEFAULT 0,
                 rating REAL DEFAULT 0,
                 rating_count INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Book Downloads Tracking
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS book_downloads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                user_id INTEGER,
+                download_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         ''')
         
@@ -154,6 +166,7 @@ class Database:
                 total_users INTEGER DEFAULT 0,
                 active_users INTEGER DEFAULT 0,
                 total_books INTEGER DEFAULT 0,
+                books_downloaded INTEGER DEFAULT 0,
                 new_registrations INTEGER DEFAULT 0,
                 UNIQUE(stat_date)
             )
@@ -171,6 +184,14 @@ class Database:
         """Create a new admin user"""
         self.connect()
         try:
+            self.cursor.execute(
+                'SELECT id FROM admins WHERE username = ?',
+                (username,)
+            )
+            if self.cursor.fetchone():
+                print(f"✗ Admin user '{username}' already exists")
+                return False
+
             password_hash = self.hash_password(password)
             self.cursor.execute(
                 'INSERT INTO admins (username, password_hash, email) VALUES (?, ?, ?)',

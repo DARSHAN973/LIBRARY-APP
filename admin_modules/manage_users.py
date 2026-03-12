@@ -15,6 +15,7 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.spinner import MDSpinner
 from datetime import datetime
 import sqlite3
+from utils import run_with_loading
 
 
 def create_user_card(user_data, view_callback, toggle_status_callback, delete_callback):
@@ -443,73 +444,91 @@ def load_users(users_container, pagination_container, state, search_field, paren
         loading_box.add_widget(loading_label)
         users_container.add_widget(loading_box)
     
-    # Build query
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    
-    # Count total users (searches entire database)
-    count_query = "SELECT COUNT(*) FROM users WHERE 1=1"
-    params = []
-    
-    # Search filter
-    if search_field.text.strip():
-        search_term = f"%{search_field.text.strip()}%"
-        count_query += " AND (username LIKE ? OR email LIKE ? OR phone LIKE ? OR CAST(id AS TEXT) LIKE ?)"
-        params.extend([search_term, search_term, search_term, search_term])
-    
-    cursor.execute(count_query, params)
-    state['total_users'] = cursor.fetchone()[0]
-    state['total_pages'] = max(1, (state['total_users'] + state['users_per_page'] - 1) // state['users_per_page'])
-    
-    # Ensure current page is valid
-    if state['current_page'] > state['total_pages']:
-        state['current_page'] = state['total_pages']
-    
-    # Get users for current page
-    offset = (state['current_page'] - 1) * state['users_per_page']
-    data_query = count_query.replace("COUNT(*)", "id, username, email, is_active, created_at, last_login")
-    data_query += f" ORDER BY created_at DESC LIMIT {state['users_per_page']} OFFSET {offset}"
-    
-    cursor.execute(data_query, params)
-    users = cursor.fetchall()
-    conn.close()
-    
-    if not update_pagination_only:
-        # Clear loading and add users
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+
+        count_query = "SELECT COUNT(*) FROM users WHERE 1=1"
+        params = []
+
+        if search_field.text.strip():
+            search_term = f"%{search_field.text.strip()}%"
+            count_query += " AND (username LIKE ? OR email LIKE ? OR phone LIKE ? OR CAST(id AS TEXT) LIKE ?)"
+            params.extend([search_term, search_term, search_term, search_term])
+
+        cursor.execute(count_query, params)
+        total_users = cursor.fetchone()[0]
+        total_pages = max(1, (total_users + state['users_per_page'] - 1) // state['users_per_page'])
+
+        current_page = min(state['current_page'], total_pages)
+        offset = (current_page - 1) * state['users_per_page']
+        data_query = count_query.replace("COUNT(*)", "id, username, email, is_active, created_at, last_login")
+        data_query += f" ORDER BY created_at DESC LIMIT {state['users_per_page']} OFFSET {offset}"
+
+        cursor.execute(data_query, params)
+        users = cursor.fetchall()
+        conn.close()
+        return total_users, total_pages, current_page, users
+
+    def on_success(result):
+        total_users, total_pages, current_page, users = result
+        state['total_users'] = total_users
+        state['total_pages'] = total_pages
+        state['current_page'] = current_page
+
+        if not update_pagination_only:
+            users_container.clear_widgets()
+
+            if users:
+                for user in users:
+                    card = create_user_card(
+                        user,
+                        lambda user_id, u=user: show_user_details(user_id, parent_instance),
+                        lambda user_id, current_status, u=user: show_toggle_status_confirmation(user_id, current_status, parent_instance, lambda: load_users(users_container, pagination_container, state, search_field, parent_instance)),
+                        lambda user_id, u=user: show_delete_confirmation(user_id, parent_instance, lambda: load_users(users_container, pagination_container, state, search_field, parent_instance))
+                    )
+                    users_container.add_widget(card)
+            else:
+                no_results = MDLabel(
+                    text="No users found\nTry adjusting your search",
+                    font_style='Body1',
+                    theme_text_color='Secondary',
+                    halign='center',
+                    size_hint_y=None,
+                    height=dp(100)
+                )
+                users_container.add_widget(no_results)
+
+        for pag_container in [state.get('pagination_top'), state.get('pagination_bottom')]:
+            if pag_container:
+                pag_container.clear_widgets()
+                if state['total_pages'] > 1:
+                    pagination = create_pagination_controls(
+                        state['current_page'],
+                        state['total_pages'],
+                        lambda page: change_page(page, users_container, pagination_container, state, search_field, parent_instance)
+                    )
+                    pag_container.add_widget(pagination)
+
+    def on_error(exc):
         users_container.clear_widgets()
-        
-        if users:
-            for user in users:
-                card = create_user_card(
-                    user,
-                    lambda user_id, u=user: show_user_details(user_id, parent_instance),
-                    lambda user_id, current_status, u=user: show_toggle_status_confirmation(user_id, current_status, parent_instance, lambda: load_users(users_container, pagination_container, state, search_field, parent_instance)),
-                    lambda user_id, u=user: show_delete_confirmation(user_id, parent_instance, lambda: load_users(users_container, pagination_container, state, search_field, parent_instance))
-                )
-                users_container.add_widget(card)
-        else:
-            # No results
-            no_results = MDLabel(
-                text="No users found\nTry adjusting your search",
-                font_style='Body1',
-                theme_text_color='Secondary',
-                halign='center',
-                size_hint_y=None,
-                height=dp(100)
-            )
-            users_container.add_widget(no_results)
-    
-    # Update both pagination containers (top and bottom)
-    for pag_container in [state.get('pagination_top'), state.get('pagination_bottom')]:
-        if pag_container:
-            pag_container.clear_widgets()
-            if state['total_pages'] > 1:
-                pagination = create_pagination_controls(
-                    state['current_page'],
-                    state['total_pages'],
-                    lambda page: change_page(page, users_container, pagination_container, state, search_field, parent_instance)
-                )
-                pag_container.add_widget(pagination)
+        users_container.add_widget(MDLabel(
+            text=f"Failed to load users: {exc}",
+            font_style='Caption',
+            theme_text_color='Error',
+            halign='center',
+            size_hint_y=None,
+            height=dp(80)
+        ))
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=on_error,
+        message="Loading users...",
+        delay=0.5,
+    )
 
 
 def change_page(new_page, users_container, pagination_container, state, search_field, parent_instance):
@@ -520,238 +539,268 @@ def change_page(new_page, users_container, pagination_container, state, search_f
 
 def show_user_details(user_id, parent_instance):
     """Show user details in a modal (read-only)"""
-    
-    # Get user data
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT username, email, is_active, created_at, last_login
-        FROM users WHERE id = ?
-    """, (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if not user:
-        return
-    
-    username, email, is_active, created_at, last_login = user
-    
-    # Create details container
-    details = BoxLayout(
-        orientation='vertical',
-        spacing=dp(12),
-        padding=dp(15),
-        size_hint_y=None
-    )
-    details.bind(minimum_height=details.setter('height'))
-    
-    # Add details
-    def add_detail(label, value, icon_name=None):
-        row = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(45), spacing=dp(4))
-        
-        # Label row with optional icon
-        label_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(18), spacing=dp(4))
-        
-        if icon_name:
-            icon = MDIcon(
-                icon=icon_name,
+    def worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT username, email, is_active, created_at, last_login
+            FROM users WHERE id = ?
+        """, (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        return user
+
+    def on_success(user):
+        if not user:
+            return
+
+        username, email, is_active, created_at, last_login = user
+
+        details = BoxLayout(
+            orientation='vertical',
+            spacing=dp(12),
+            padding=dp(15),
+            size_hint_y=None
+        )
+        details.bind(minimum_height=details.setter('height'))
+
+        def add_detail(label, value, icon_name=None):
+            row = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(45), spacing=dp(4))
+
+            label_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(18), spacing=dp(4))
+            if icon_name:
+                icon = MDIcon(
+                    icon=icon_name,
+                    theme_text_color='Secondary',
+                    font_size='14sp',
+                    size_hint_x=None,
+                    width=dp(18)
+                )
+                label_row.add_widget(icon)
+
+            label_row.add_widget(MDLabel(
+                text=label,
+                font_style='Caption',
                 theme_text_color='Secondary',
-                font_size='14sp',
-                size_hint_x=None,
-                width=dp(18)
-            )
-            label_row.add_widget(icon)
-        
-        label_row.add_widget(MDLabel(
-            text=label,
-            font_style='Caption',
-            theme_text_color='Secondary',
-            size_hint_y=None,
-            height=dp(18)
-        ))
-        row.add_widget(label_row)
-        
-        row.add_widget(MDLabel(
-            text=str(value) if value else 'N/A',
-            font_style='Body2',
-            theme_text_color='Primary',
-            size_hint_y=None,
-            height=dp(25)
-        ))
-        details.add_widget(row)
-    
-    add_detail("Username", username, "account")
-    add_detail("Email / User ID", email if email else f'User #{user_id}', "email")
-    
-    # Add status
-    status_text = "✅ Active" if is_active else "❌ Inactive"
-    add_detail("Account Status", status_text, "shield-account")
-    
-    # Format dates
-    if created_at:
-        try:
-            date_obj = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S')
-            formatted_date = date_obj.strftime('%B %d, %Y at %I:%M %p')
-            add_detail("Registered Date", formatted_date, "calendar")
-        except:
-            add_detail("Registered Date", created_at, "calendar")
-    
-    if last_login:
-        try:
-            date_obj = datetime.strptime(last_login, '%Y-%m-%d %H:%M:%S')
-            formatted_date = date_obj.strftime('%B %d, %Y at %I:%M %p')
-            add_detail("Last Login", formatted_date, "login")
-        except:
-            add_detail("Last Login", last_login, "login")
-    else:
-        add_detail("Last Login", "Never logged in", "login")
-    
-    # Scroll view for details
-    scroll = ScrollView(size_hint=(1, None), height=dp(350))
-    scroll.add_widget(details)
-    
-    # Dialog
-    dialog = MDDialog(
-        title="User Details",
-        type="custom",
-        content_cls=scroll,
-        buttons=[
-            MDFlatButton(
-                text="CLOSE",
-                on_release=lambda x: dialog.dismiss()
-            ),
-        ],
+                size_hint_y=None,
+                height=dp(18)
+            ))
+            row.add_widget(label_row)
+
+            row.add_widget(MDLabel(
+                text=str(value) if value else 'N/A',
+                font_style='Body2',
+                theme_text_color='Primary',
+                size_hint_y=None,
+                height=dp(25)
+            ))
+            details.add_widget(row)
+
+        add_detail("Username", username, "account")
+        add_detail("Email / User ID", email if email else f"User #{user_id}", "email")
+
+        status_text = "Active" if is_active else "Inactive"
+        add_detail("Account Status", status_text, "shield-account")
+
+        if created_at:
+            try:
+                date_obj = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S')
+                formatted_date = date_obj.strftime('%B %d, %Y at %I:%M %p')
+                add_detail("Registered Date", formatted_date, "calendar")
+            except Exception:
+                add_detail("Registered Date", created_at, "calendar")
+
+        if last_login:
+            try:
+                date_obj = datetime.strptime(last_login, '%Y-%m-%d %H:%M:%S')
+                formatted_date = date_obj.strftime('%B %d, %Y at %I:%M %p')
+                add_detail("Last Login", formatted_date, "login")
+            except Exception:
+                add_detail("Last Login", last_login, "login")
+        else:
+            add_detail("Last Login", "Never logged in", "login")
+
+        scroll = ScrollView(size_hint=(1, None), height=dp(350))
+        scroll.add_widget(details)
+
+        dialog = MDDialog(
+            title="User Details",
+            type="custom",
+            content_cls=scroll,
+            buttons=[
+                MDFlatButton(
+                    text="CLOSE",
+                    on_release=lambda x: dialog.dismiss()
+                ),
+            ],
+        )
+        dialog.open()
+
+    run_with_loading(
+        parent_instance,
+        worker=worker,
+        on_success=on_success,
+        on_error=lambda exc: None,
+        message="Loading user details...",
+        delay=0.5,
     )
-    dialog.open()
 
 
 def show_toggle_status_confirmation(user_id, current_status, parent_instance, refresh_callback):
     """Show toggle status confirmation dialog"""
     
-    # Get username
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+    def after_username(username):
+        new_status = 0 if current_status else 1
+        action = "activate" if new_status else "deactivate"
     
-    if not user:
-        return
-    
-    username = user[0]
-    new_status = 0 if current_status else 1
-    action = "activate" if new_status else "deactivate"
-    
-    def confirm_toggle(dialog):
-        try:
-            conn = sqlite3.connect('library.db')
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_status, user_id))
-            conn.commit()
-            conn.close()
-            
-            dialog.dismiss()
-            
-            # Success message
-            status_text = "activated" if new_status else "deactivated"
-            success_dialog = MDDialog(
-                title="Success",
-                text=f"User '{username}' {status_text} successfully!",
-                buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
+        def confirm_toggle(dialog):
+            def worker():
+                conn = sqlite3.connect()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_status, user_id))
+                conn.commit()
+                conn.close()
+                return True
+
+            def on_success(_res):
+                dialog.dismiss()
+                status_text = "activated" if new_status else "deactivated"
+                success_dialog = MDDialog(
+                    title="Success",
+                    text=f"User '{username}' {status_text} successfully!",
+                    buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
+                )
+                success_dialog.open()
+                if refresh_callback:
+                    refresh_callback()
+
+            def on_error(e):
+                error_dialog = MDDialog(
+                    title="Database Error",
+                    text=f"Failed to update user status: {str(e)}",
+                    buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
+                )
+                error_dialog.open()
+
+            run_with_loading(
+                parent_instance,
+                worker=worker,
+                on_success=on_success,
+                on_error=on_error,
+                message="Updating user status...",
+                delay=0.5,
             )
-            success_dialog.open()
-            
-            # Refresh list
-            if refresh_callback:
-                refresh_callback()
-        
-        except Exception as e:
-            error_dialog = MDDialog(
-                title="Database Error",
-                text=f"Failed to update user status: {str(e)}",
-                buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
-            )
-            error_dialog.open()
     
     # Confirmation dialog
-    action_text = f"{'Activate' if new_status else 'Deactivate'} this user"
-    dialog = MDDialog(
-        title=f"Confirm {action_text.split()[0]}",
-        text=f"Are you sure you want to {action} this user?\n\nUsername: {username}",
-        buttons=[
-            MDFlatButton(
-                text="CANCEL",
-                on_release=lambda x: dialog.dismiss()
-            ),
-            MDRaisedButton(
-                text=action_text.split()[0].upper(),
-                md_bg_color=(0.30, 0.69, 0.31, 1) if new_status else (0.96, 0.26, 0.21, 1),
-                on_release=lambda x: confirm_toggle(dialog)
-            ),
-        ],
+        action_text = f"{'Activate' if new_status else 'Deactivate'} this user"
+        dialog = MDDialog(
+            title=f"Confirm {action_text.split()[0]}",
+            text=f"Are you sure you want to {action} this user?\n\nUsername: {username}",
+            buttons=[
+                MDFlatButton(
+                    text="CANCEL",
+                    on_release=lambda x: dialog.dismiss()
+                ),
+                MDRaisedButton(
+                    text=action_text.split()[0].upper(),
+                    md_bg_color=(0.30, 0.69, 0.31, 1) if new_status else (0.96, 0.26, 0.21, 1),
+                    on_release=lambda x: confirm_toggle(dialog)
+                ),
+            ],
+        )
+        dialog.open()
+
+    def load_username_worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        return user[0] if user else None
+
+    run_with_loading(
+        parent_instance,
+        worker=load_username_worker,
+        on_success=lambda username: after_username(username) if username else None,
+        on_error=lambda exc: None,
+        message="Loading user...",
+        delay=0.5,
     )
-    dialog.open()
 
 
 def show_delete_confirmation(user_id, parent_instance, refresh_callback):
     """Show delete confirmation dialog"""
     
-    # Get username
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+    def after_username(username):
     
-    if not user:
-        return
-    
-    username = user[0]
-    
-    def confirm_delete(dialog):
-        try:
-            conn = sqlite3.connect('library.db')
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            conn.commit()
-            conn.close()
-            
-            dialog.dismiss()
-            
-            # Success message
-            success_dialog = MDDialog(
-                title="Success",
-                text=f"User '{username}' deleted successfully!",
-                buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
+        def confirm_delete(dialog):
+            def worker():
+                conn = sqlite3.connect()
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                conn.commit()
+                conn.close()
+                return True
+
+            def on_success(_res):
+                dialog.dismiss()
+                success_dialog = MDDialog(
+                    title="Success",
+                    text=f"User '{username}' deleted successfully!",
+                    buttons=[MDFlatButton(text="OK", on_release=lambda x: success_dialog.dismiss())]
+                )
+                success_dialog.open()
+                if refresh_callback:
+                    refresh_callback()
+
+            def on_error(e):
+                error_dialog = MDDialog(
+                    title="Database Error",
+                    text=f"Failed to delete user: {str(e)}",
+                    buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
+                )
+                error_dialog.open()
+
+            run_with_loading(
+                parent_instance,
+                worker=worker,
+                on_success=on_success,
+                on_error=on_error,
+                message="Deleting user...",
+                delay=0.5,
             )
-            success_dialog.open()
-            
-            # Refresh list
-            if refresh_callback:
-                refresh_callback()
-        
-        except Exception as e:
-            error_dialog = MDDialog(
-                title="Database Error",
-                text=f"Failed to delete user: {str(e)}",
-                buttons=[MDFlatButton(text="OK", on_release=lambda x: error_dialog.dismiss())]
-            )
-            error_dialog.open()
     
     # Confirmation dialog
-    dialog = MDDialog(
-        title="Confirm Delete",
-        text=f"Are you sure you want to delete this user?\n\nUsername: {username}\n\n⚠️ This action cannot be undone.",
-        buttons=[
-            MDFlatButton(
-                text="CANCEL",
-                on_release=lambda x: dialog.dismiss()
-            ),
-            MDRaisedButton(
-                text="DELETE",
-                md_bg_color=(0.96, 0.26, 0.21, 1),
-                on_release=lambda x: confirm_delete(dialog)
-            ),
-        ],
+        dialog = MDDialog(
+            title="Confirm Delete",
+            text=f"Are you sure you want to delete this user?\n\nUsername: {username}\n\nThis action cannot be undone.",
+            buttons=[
+                MDFlatButton(
+                    text="CANCEL",
+                    on_release=lambda x: dialog.dismiss()
+                ),
+                MDRaisedButton(
+                    text="DELETE",
+                    md_bg_color=(0.96, 0.26, 0.21, 1),
+                    on_release=lambda x: confirm_delete(dialog)
+                ),
+            ],
+        )
+        dialog.open()
+
+    def load_username_worker():
+        conn = sqlite3.connect()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        return user[0] if user else None
+
+    run_with_loading(
+        parent_instance,
+        worker=load_username_worker,
+        on_success=lambda username: after_username(username) if username else None,
+        on_error=lambda exc: None,
+        message="Loading user...",
+        delay=0.5,
     )
-    dialog.open()
