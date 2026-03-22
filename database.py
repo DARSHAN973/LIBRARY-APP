@@ -7,6 +7,22 @@ from db_adapter import sqlite3
 import hashlib
 import json
 from datetime import datetime
+import os
+
+
+def get_db_path():
+    """Get writable database path - mobile-safe."""
+    try:
+        from kivy.app import App
+        app = App.get_running_app()
+        if app and getattr(app, "user_data_dir", None):
+            db_dir = app.user_data_dir
+            os.makedirs(db_dir, exist_ok=True)
+            return os.path.join(db_dir, "library.db")
+    except Exception:
+        pass
+    # Fallback to current directory
+    return os.path.join(os.getcwd(), "library.db")
 
 
 class Database:
@@ -17,7 +33,8 @@ class Database:
         
     def connect(self):
         """Connect using the configured remote database connection."""
-        self.conn = sqlite3.connect('library.db')
+        db_path = get_db_path()
+        self.conn = sqlite3.connect(db_path)
         self.cursor = self.conn.cursor()
         return self.conn
         
