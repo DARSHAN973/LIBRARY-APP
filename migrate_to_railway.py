@@ -15,8 +15,8 @@ import pg8000.dbapi
 from database import Database
 
 RAILWAY_DATABASE_URL = (
-    "postgresql://postgres:DlOaWOSCsTSUQhdFdasYYJfyTBZOvThl"
-    "@postgres.railway.internal:5432/railway"
+    "postgresql://postgres:LaOEWdgPFEnQiGytKyaykfAfHDdaBQGY"
+    "@caboose.proxy.rlwy.net:24267/railway"
 )
 
 SQLITE_DB_PATH = os.path.join(os.path.dirname(__file__), "library.db")

@@ -32,7 +32,7 @@ def test_groq_api():
     }
     
     payload = {
-        "model": "mixtral-8x7b-32768",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {
                 "role": "system",
@@ -48,7 +48,7 @@ def test_groq_api():
     }
     
     print("\n📤 Sending test request to Groq API...")
-    print("   Model: mixtral-8x7b-32768")
+    print("   Model: llama-3.3-70b-versatile")
     print("   Message: 'Suggest a good book for someone who likes science fiction.'")
     
     try:

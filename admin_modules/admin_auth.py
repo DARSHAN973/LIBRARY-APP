@@ -16,10 +16,21 @@ from db_adapter import sqlite3
 import hashlib
 import json
 import os
+from kivy.app import App
 
 
-# Session file path - store in data directory
-SESSION_FILE = os.path.join('data', 'admin_session.json')
+def get_session_file():
+    """Return writable session file path for desktop/mobile."""
+    try:
+        app = App.get_running_app()
+        if app and getattr(app, "user_data_dir", None):
+            session_dir = os.path.join(app.user_data_dir, "data")
+            os.makedirs(session_dir, exist_ok=True)
+            return os.path.join(session_dir, "admin_session.json")
+    except Exception:
+        pass
+    os.makedirs("data", exist_ok=True)
+    return os.path.join("data", "admin_session.json")
 
 
 def save_session(admin_id, username):
@@ -29,21 +40,23 @@ def save_session(admin_id, username):
         'username': username,
         'logged_in': True
     }
-    with open(SESSION_FILE, 'w') as f:
+    with open(get_session_file(), 'w') as f:
         json.dump(session_data, f)
 
 
 def clear_session():
     """Clear admin session"""
-    if os.path.exists(SESSION_FILE):
-        os.remove(SESSION_FILE)
+    session_file = get_session_file()
+    if os.path.exists(session_file):
+        os.remove(session_file)
 
 
 def get_session():
     """Get current admin session"""
-    if os.path.exists(SESSION_FILE):
+    session_file = get_session_file()
+    if os.path.exists(session_file):
         try:
-            with open(SESSION_FILE, 'r') as f:
+            with open(session_file, 'r') as f:
                 return json.load(f)
         except:
             return None

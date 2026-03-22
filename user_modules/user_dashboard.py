@@ -16,6 +16,7 @@ from user_modules.home_tab import load_home_tab
 from user_modules.browse_tab import load_browse_tab
 from user_modules.search_tab import load_search_tab
 from user_modules.profile_tab import load_profile_tab
+from admin_modules.admin_auth import clear_session
 from utils import LoadingOverlay
 from ai_chatbot import show_ai_chat
 
@@ -251,10 +252,11 @@ class UserDashboard(MDScreen):
     
     def logout(self, instance):
         """Logout user and return to login screen"""
-        import json
-        # Clear user session
-        with open('data/admin_session.json', 'w') as f:
-            json.dump({'logged_in': False}, f)
+        # Clear user/admin session in a path-safe way.
+        try:
+            clear_session()
+        except Exception:
+            pass
         
         # Navigate back to login screen
         self.manager.current = 'login'

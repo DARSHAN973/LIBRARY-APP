@@ -26,7 +26,7 @@ app = Flask(__name__)
 API_KEY = os.getenv("LIBRARY_API_KEY", "collage-project-4217").strip()
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:DlOaWOSCsTSUQhdFdasYYJfyTBZOvThl@switchyard.proxy.rlwy.net:57523/railway",
+    "postgresql://postgres:LaOEWdgPFEnQiGytKyaykfAfHDdaBQGY@caboose.proxy.rlwy.net:24267/railway",
 ).strip()
 USE_POSTGRES = bool(DATABASE_URL)
 

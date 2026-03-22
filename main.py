@@ -18,7 +18,13 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 import threading
 import os
-from dotenv import load_dotenv
+import sys
+import traceback
+try:
+    from dotenv import load_dotenv
+except Exception:
+    def load_dotenv(*_args, **_kwargs):
+        return False
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton, MDIconButton
@@ -27,11 +33,7 @@ from kivymd.uix.label import MDLabel, MDIcon
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.card import MDCard
 from database import Database
-from admin_modules.admin_dashboard import AdminDashboard
-from admin_modules.admin_auth import save_session
-from user_modules.user_dashboard import UserDashboard
 from utils import LoadingOverlay, run_with_loading
-from ai_chatbot import init_ai_module
 
 # Set window size for testing (comment out for mobile deployment)
 # Window.size = (360, 640)
@@ -582,7 +584,11 @@ class LoginScreen(MDScreen):
 
         def on_success(is_valid):
             if is_valid:
-                save_session(1, username)
+                try:
+                    from admin_modules.admin_auth import save_session
+                    save_session(1, username)
+                except Exception as exc:
+                    print(f"Session save warning: {exc}")
                 self.show_success_dialog(username, "Admin")
             else:
                 self.show_error("Invalid admin credentials")
@@ -724,11 +730,15 @@ class LoginScreen(MDScreen):
         print(f"Navigating to {user_type} dashboard for {username}...")
         
         if user_type == 'Admin':
+            if 'admin_dashboard' not in [screen.name for screen in self.manager.screens]:
+                from admin_modules.admin_dashboard import AdminDashboard
+                self.manager.add_widget(AdminDashboard())
             self.manager.get_screen('admin_dashboard').set_admin_name(username)
             self.manager.current = 'admin_dashboard'
         else:
             # Navigate to user dashboard
             if 'user_dashboard' not in [screen.name for screen in self.manager.screens]:
+                from user_modules.user_dashboard import UserDashboard
                 user_dash = UserDashboard(user_id=user_id, username=username, name='user_dashboard')
                 self.manager.add_widget(user_dash)
             else:
@@ -754,9 +764,26 @@ class LoginScreen(MDScreen):
 
 class LibraryApp(MDApp):
     """Main Application Class"""
+
+    def _install_crash_logger(self):
+        """Log uncaught exceptions to a writable file for mobile diagnostics."""
+        def _hook(exc_type, exc_value, exc_tb):
+            try:
+                log_dir = getattr(self, "user_data_dir", os.getcwd())
+                os.makedirs(log_dir, exist_ok=True)
+                crash_log = os.path.join(log_dir, "crash.log")
+                with open(crash_log, "a", encoding="utf-8") as fh:
+                    fh.write("\n=== Uncaught Exception ===\n")
+                    traceback.print_exception(exc_type, exc_value, exc_tb, file=fh)
+            except Exception:
+                pass
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+        sys.excepthook = _hook
     
     def build(self):
         """Build the application"""
+        self._install_crash_logger()
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.primary_hue = "500"
         self.theme_cls.theme_style = "Light"
@@ -764,7 +791,7 @@ class LibraryApp(MDApp):
         # Screen Manager
         sm = ScreenManager()
         sm.add_widget(LoginScreen())
-        sm.add_widget(AdminDashboard())
+        # Admin dashboard is loaded lazily after successful admin login.
         
         return sm
         
@@ -777,6 +804,7 @@ class LibraryApp(MDApp):
         groq_api_key = os.getenv("GROQ_API_KEY")
         if groq_api_key:
             try:
+                from ai_chatbot import init_ai_module
                 init_ai_module(groq_api_key)
                 print("✅ AI Chatbot Module initialized successfully")
             except Exception as e:

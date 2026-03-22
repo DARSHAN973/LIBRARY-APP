@@ -9,19 +9,24 @@ import os
 import threading
 import requests
 from datetime import datetime
+from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
-from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.image import Image
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.button import MDRaisedButton, MDFlatButton
-from kivymd.uix.label import MDLabel
+try:
+    from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton
+except Exception:
+    from kivymd.uix.button import MDRaisedButton, MDFlatButton
+    MDRectangleFlatButton = MDFlatButton
+from kivymd.uix.label import MDLabel, MDIcon
+from kivymd.uix.textfield import MDTextField
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
@@ -31,31 +36,50 @@ from kivy.metrics import dp
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Chat history for context
-CHAT_HISTORY_FILE = "data/chat_history.json"
+def get_data_dir():
+    """Return a writable app data directory (works on Android and desktop)."""
+    try:
+        app = App.get_running_app()
+        if app and getattr(app, "user_data_dir", None):
+            return os.path.join(app.user_data_dir, "data")
+    except Exception:
+        pass
+    return os.path.join(os.getcwd(), "data")
+
+
+def get_chat_history_file():
+    return os.path.join(get_data_dir(), "chat_history.json")
 
 # ─── HELPERS ────────────────────────────────────────────────────────────────
 
 def ensure_chat_dir():
     """Ensure data directory exists."""
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(get_data_dir(), exist_ok=True)
 
 def load_chat_history():
     """Load previous chat messages from file."""
-    ensure_chat_dir()
-    if os.path.exists(CHAT_HISTORY_FILE):
+    try:
+        ensure_chat_dir()
+    except Exception:
+        return []
+    chat_file = get_chat_history_file()
+    if os.path.exists(chat_file):
         try:
-            with open(CHAT_HISTORY_FILE, "r") as f:
+            with open(chat_file, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return []
     return []
 
 def save_chat_history(messages):
     """Save chat messages to file."""
-    ensure_chat_dir()
-    with open(CHAT_HISTORY_FILE, "w") as f:
-        json.dump(messages, f, indent=2)
+    try:
+        ensure_chat_dir()
+        with open(get_chat_history_file(), "w", encoding="utf-8") as f:
+            json.dump(messages, f, indent=2)
+    except Exception:
+        # Do not crash UI if storage is unavailable on device.
+        pass
 
 def get_system_prompt():
     """System prompt for library assistant AI."""
@@ -72,7 +96,7 @@ Always prioritize helping users find or understand books."""
 def query_groq(user_message, chat_history):
     """Send message to Groq API and get response."""
     if not GROQ_API_KEY:
-        return "⚠️  AI API key not configured. Please set GROQ_API_KEY environment variable."
+        return "⚠️ AI API key not configured. Please set GROQ_API_KEY in .env file."
     
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -98,7 +122,7 @@ def query_groq(user_message, chat_history):
     })
     
     payload = {
-        "model": "llama-3.3-70b-versatile",  # Current Groq recommended model
+        "model": "llama-3.3-70b-versatile",
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 512,
@@ -108,77 +132,71 @@ def query_groq(user_message, chat_history):
     try:
         response = requests.post(GROQ_API_URL, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
-        
-        data = response.json()
-        ai_response = data["choices"][0]["message"]["content"]
-        return ai_response
-    except Exception as e:
-        return f"❌ Error: {str(e)}. Check API key or internet connection."
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        return f"❌ API Error: {str(e)[:100]}"
+    except (KeyError, IndexError) as e:
+        return f"❌ Response Error: {str(e)}"
 
 # ─── UI COMPONENTS ──────────────────────────────────────────────────────────
-
-class ChatBubble(MDCard):
-    """Individual chat message bubble."""
-    def __init__(self, text, is_user=True, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = "vertical"
-        self.padding = dp(12)
-        self.spacing = dp(8)
-        self.size_hint_y = None
-        self.radius = [dp(12)]
-        
-        if is_user:
-            self.md_bg_color = (0.2, 0.6, 0.9, 1)  # Blue for user
-            self.size_hint_x = 0.85
-            offset = dp(20)
-        else:
-            self.md_bg_color = (0.95, 0.95, 0.95, 1)  # Gray for AI
-            self.size_hint_x = 0.9
-            offset = 0
-        
-        msg_label = MDLabel(
-            text=text,
-            theme_text_color="Custom",
-            text_color=(1, 1, 1, 1) if is_user else (0, 0, 0, 1),
-            size_hint_y=None,
-            height=dp(max(40, len(text) // 3)),
-            halign="left",
-            markup=False
-        )
-        self.add_widget(msg_label)
-        self.height = msg_label.height + dp(24)
-
 
 class AIChat(MDBoxLayout):
     """Main AI chatbot UI component."""
     def __init__(self, user_id=None, **kwargs):
         super().__init__(**kwargs)
         self.orientation = "vertical"
-        self.padding = dp(10)
-        self.spacing = dp(10)
+        self.padding = [dp(10), dp(6), dp(10), dp(6)]
+        self.spacing = dp(6)
+        self.size_hint_y = None
+        self.height = max(Window.height - dp(210), dp(440))
         self.user_id = user_id
         
         # Load chat history
         self.chat_history = load_chat_history()
-        self.messages = []
         
         # Header
-        header = MDLabel(
-            text="📚 Library AI Assistant",
-            theme_text_color="Custom",
-            text_color=(0, 0, 0, 1),
-            font_style="H6",
+        header_box = MDBoxLayout(
+            orientation="horizontal",
             size_hint_y=None,
-            height=dp(40)
+            height=dp(42),
+            spacing=dp(6)
         )
-        self.add_widget(header)
+        header_icon = MDIcon(
+            icon="robot-happy-outline",
+            theme_text_color="Custom",
+            text_color=(0.13, 0.59, 0.95, 1),
+            size_hint=(None, None),
+            size=(dp(32), dp(32)),
+            pos_hint={"center_y": 0.5}
+        )
+        header_label = MDLabel(
+            text="Library AI Assistant",
+            font_style="H6",
+            theme_text_color="Custom",
+            text_color=(0.1, 0.1, 0.1, 1),
+            size_hint_x=1,
+            valign="middle"
+        )
+        clear_btn = MDRectangleFlatButton(
+            text="Clear",
+            line_color=(0.13, 0.59, 0.95, 1),
+            text_color=(0.13, 0.59, 0.95, 1),
+            size_hint=(None, None),
+            size=(dp(78), dp(34)),
+            on_press=self.clear_chat
+        )
+        header_box.add_widget(header_icon)
+        header_box.add_widget(header_label)
+        header_box.add_widget(clear_btn)
+        self.add_widget(header_box)
         
-        # Chat display area
-        self.chat_scroll = MDScrollView(size_hint_y=0.85)
+        # Chat display area (scrollable)
+        self.chat_scroll = MDScrollView(size_hint=(1, 1))
         self.chat_box = MDBoxLayout(
             orientation="vertical",
-            spacing=dp(8),
-            padding=dp(10),
+            spacing=dp(4),
+            padding=[dp(4), dp(2), dp(4), dp(2)],
             size_hint_y=None
         )
         self.chat_box.bind(minimum_height=self.chat_box.setter("height"))
@@ -189,19 +207,27 @@ class AIChat(MDBoxLayout):
         self._refresh_messages()
         
         # Input area
-        input_box = MDBoxLayout(orientation="horizontal", spacing=dp(8), size_hint_y=0.15)
+        input_box = MDBoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(68),
+            spacing=dp(8),
+            padding=[dp(0), dp(2), dp(0), dp(2)]
+        )
         
-        self.message_input = TextInput(
-            multiline=False,
+        self.message_input = MDTextField(
             hint_text="Ask me about books, recommendations...",
-            size_hint_x=0.85,
-            font_size="12sp"
+            size_hint=(1, None),
+            height=dp(52),
+            mode="rectangle",
+            multiline=False
         )
         input_box.add_widget(self.message_input)
         
         send_btn = MDRaisedButton(
             text="Send",
-            size_hint_x=0.15,
+            size_hint=(None, None),
+            size=(dp(82), dp(46)),
             on_press=self.send_message
         )
         input_box.add_widget(send_btn)
@@ -210,20 +236,84 @@ class AIChat(MDBoxLayout):
     def _refresh_messages(self):
         """Refresh chat display from history."""
         self.chat_box.clear_widgets()
-        for msg in self.chat_history:
-            bubble = ChatBubble(
-                text=msg["content"],
-                is_user=(msg["role"] == "user"),
-                size_hint_x=1
+        if not self.chat_history:
+            # Show welcome message
+            welcome = MDLabel(
+                text="👋 Hello! I'm your library AI assistant.\nAsk me about books, recommendations, or how to use the app!",
+                size_hint_y=None,
+                height=dp(52),
+                halign="center",
+                theme_text_color="Custom",
+                text_color=(0.5, 0.5, 0.5, 1)
             )
-            self.chat_box.add_widget(bubble)
+            self.chat_box.add_widget(welcome)
+        else:
+            for msg in self.chat_history:
+                self._add_message_bubble(msg["content"], msg["role"] == "user")
         
+        self.chat_box.height = self.chat_box.minimum_height
         # Auto-scroll to bottom
         Clock.schedule_once(lambda dt: self._scroll_to_bottom(), 0.1)
     
+    def _add_message_bubble(self, text, is_user):
+        """Add a single message bubble."""
+        bubble_box = MDBoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(1),
+            spacing=dp(6),
+            padding=[0, dp(2), 0, dp(2)]
+        )
+        
+        leading_spacer = MDLabel(size_hint_x=0.22, size_hint_y=None, height=dp(1))
+        trailing_spacer = MDLabel(size_hint_x=0.22, size_hint_y=None, height=dp(1))
+
+        bubble = MDCard(
+            orientation="vertical",
+            padding=dp(8),
+            spacing=dp(2),
+            size_hint_x=0.78,
+            size_hint_y=None,
+            radius=[dp(16), dp(16), dp(16), dp(16)],
+            md_bg_color=(0.2, 0.6, 0.95, 1) if is_user else (0.95, 0.95, 0.95, 1)
+        )
+        
+        msg_label = MDLabel(
+            text=text,
+            size_hint_y=None,
+            halign="left",
+            valign="middle",
+            text_color=(1, 1, 1, 1) if is_user else (0, 0, 0, 1),
+            theme_text_color="Custom"
+        )
+        
+        bubble.add_widget(msg_label)
+        if is_user:
+            bubble_box.add_widget(leading_spacer)
+            bubble_box.add_widget(bubble)
+        else:
+            bubble_box.add_widget(bubble)
+            bubble_box.add_widget(trailing_spacer)
+        
+        def set_height(*args):
+            bubble_width = max(bubble.width - dp(24), dp(120))
+            msg_label.text_size = (bubble_width, None)
+            msg_label.texture_update()
+            text_height = msg_label.texture_size[1]
+            bubble_height = max(text_height + dp(16), dp(38))
+            msg_label.height = text_height
+            bubble.height = bubble_height
+            bubble_box.height = bubble_height + dp(4)
+            self.chat_box.height = self.chat_box.minimum_height
+        
+        bubble.bind(width=set_height)
+        Clock.schedule_once(set_height, 0.05)
+        self.chat_box.add_widget(bubble_box)
+    
     def _scroll_to_bottom(self):
         """Auto-scroll to latest message."""
-        self.chat_scroll.scroll_y = 0
+        if self.chat_scroll:
+            self.chat_scroll.scroll_y = 0
     
     def send_message(self, instance):
         """Send user message and get AI response."""
@@ -233,8 +323,7 @@ class AIChat(MDBoxLayout):
         
         # Add user message to display
         self.message_input.text = ""
-        user_bubble = ChatBubble(text=user_msg, is_user=True, size_hint_x=1)
-        self.chat_box.add_widget(user_bubble)
+        self._add_message_bubble(user_msg, True)
         
         # Add to history
         self.chat_history.append({
@@ -244,29 +333,30 @@ class AIChat(MDBoxLayout):
         })
         
         # Show loading indicator
-        loading_label = MDLabel(
-            text="🤖 AI thinking...",
-            theme_text_color="Custom",
-            text_color=(0.5, 0.5, 0.5, 1),
+        loading_msg = MDLabel(
+            text="🤖 Thinking...",
             size_hint_y=None,
-            height=dp(30)
+            height=dp(30),
+            theme_text_color="Custom",
+            text_color=(0.5, 0.5, 0.5, 1)
         )
-        self.chat_box.add_widget(loading_label)
+        self.chat_box.add_widget(loading_msg)
         self._scroll_to_bottom()
         
         # Get AI response in background
         def get_response():
             response = query_groq(user_msg, self.chat_history)
             Clock.schedule_once(
-                lambda dt: self._display_ai_response(response, loading_label),
+                lambda dt: self._display_ai_response(response, loading_msg),
                 0
             )
         
         threading.Thread(target=get_response, daemon=True).start()
     
-    def _display_ai_response(self, response, loading_label):
+    def _display_ai_response(self, response, loading_msg):
         """Display AI response in chat."""
-        self.chat_box.remove_widget(loading_label)
+        if loading_msg in self.chat_box.children:
+            self.chat_box.remove_widget(loading_msg)
         
         # Add to history
         self.chat_history.append({
@@ -279,34 +369,41 @@ class AIChat(MDBoxLayout):
         save_chat_history(self.chat_history)
         
         # Display response
-        ai_bubble = ChatBubble(text=response, is_user=False, size_hint_x=1)
-        self.chat_box.add_widget(ai_bubble)
+        self._add_message_bubble(response, False)
         self._scroll_to_bottom()
     
-    def clear_chat(self):
+    def clear_chat(self, instance):
         """Clear chat history."""
         self.chat_history = []
-        self.chat_box.clear_widgets()
-        os.remove(CHAT_HISTORY_FILE) if os.path.exists(CHAT_HISTORY_FILE) else None
+        save_chat_history([])
+        self._refresh_messages()
 
 
 def show_ai_chat(content_scroll=None, user_id=None):
     """Open AI chat in a modal popup or add to content scroll view."""
-    chat_widget = AIChat(user_id=user_id, size_hint=(0.95, 0.9))
+    chat_widget = AIChat(user_id=user_id)
     
     if content_scroll is not None:
-        # Add to content scroll view (for tab integration)
+        # Match the same scroll-container structure used by the other tabs.
+        main_container = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            spacing=dp(12),
+            padding=[dp(15), dp(15), dp(15), dp(70)]
+        )
+        main_container.bind(minimum_height=main_container.setter("height"))
+        main_container.add_widget(chat_widget)
+
         content_scroll.clear_widgets()
-        content_scroll.add_widget(chat_widget)
+        content_scroll.add_widget(main_container)
     else:
         # Show as popup (original behavior)
         content = MDBoxLayout(orientation="vertical")
         content.add_widget(chat_widget)
         
-        # Close button
         close_btn = MDFlatButton(
             text="Close Chat",
-            size_hint_y=0.1,
+            size_hint_y=0.08,
             on_press=lambda x: popup.dismiss()
         )
         content.add_widget(close_btn)
