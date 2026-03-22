@@ -19,7 +19,6 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.image import Image
-from kivy.garden.matplotlib.backend_kivyagg import FigureCanvasKivyAgg
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.button import MDRaisedButton, MDFlatButton
 from kivymd.uix.label import MDLabel
@@ -99,7 +98,7 @@ def query_groq(user_message, chat_history):
     })
     
     payload = {
-        "model": "mixtral-8x7b-32768",  # Groq's fast model
+        "model": "llama-3.3-70b-versatile",  # Current Groq recommended model
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 512,
@@ -291,28 +290,34 @@ class AIChat(MDBoxLayout):
         os.remove(CHAT_HISTORY_FILE) if os.path.exists(CHAT_HISTORY_FILE) else None
 
 
-def show_ai_chat(user_id=None):
-    """Open AI chat in a modal popup."""
+def show_ai_chat(content_scroll=None, user_id=None):
+    """Open AI chat in a modal popup or add to content scroll view."""
     chat_widget = AIChat(user_id=user_id, size_hint=(0.95, 0.9))
     
-    content = MDBoxLayout(orientation="vertical")
-    content.add_widget(chat_widget)
-    
-    # Close button
-    close_btn = MDFlatButton(
-        text="Close Chat",
-        size_hint_y=0.1,
-        on_press=lambda x: popup.dismiss()
-    )
-    content.add_widget(close_btn)
-    
-    popup = Popup(
-        title="Library AI Assistant",
-        content=content,
-        size_hint=(0.95, 0.9)
-    )
-    popup.open()
-    return popup
+    if content_scroll is not None:
+        # Add to content scroll view (for tab integration)
+        content_scroll.clear_widgets()
+        content_scroll.add_widget(chat_widget)
+    else:
+        # Show as popup (original behavior)
+        content = MDBoxLayout(orientation="vertical")
+        content.add_widget(chat_widget)
+        
+        # Close button
+        close_btn = MDFlatButton(
+            text="Close Chat",
+            size_hint_y=0.1,
+            on_press=lambda x: popup.dismiss()
+        )
+        content.add_widget(close_btn)
+        
+        popup = Popup(
+            title="Library AI Assistant",
+            content=content,
+            size_hint=(0.95, 0.9)
+        )
+        popup.open()
+        return popup
 
 
 # ─── INTEGRATION HELPER ──────────────────────────────────────────────────────

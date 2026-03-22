@@ -17,6 +17,8 @@ from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp
 from kivy.clock import Clock
 import threading
+import os
+from dotenv import load_dotenv
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton, MDIconButton
@@ -29,6 +31,7 @@ from admin_modules.admin_dashboard import AdminDashboard
 from admin_modules.admin_auth import save_session
 from user_modules.user_dashboard import UserDashboard
 from utils import LoadingOverlay, run_with_loading
+from ai_chatbot import init_ai_module
 
 # Set window size for testing (comment out for mobile deployment)
 # Window.size = (360, 640)
@@ -766,8 +769,21 @@ class LibraryApp(MDApp):
         return sm
         
     def on_start(self):
-        """Initialize database on app start"""
+        """Initialize database and AI module on app start"""
         print("Library Mobile App Started")
+        
+        # Load environmental variables and initialize AI module
+        load_dotenv()
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if groq_api_key:
+            try:
+                init_ai_module(groq_api_key)
+                print("✅ AI Chatbot Module initialized successfully")
+            except Exception as e:
+                print(f"⚠️ AI Chatbot initialization warning: {e}")
+        else:
+            print("⚠️ GROQ_API_KEY not found in .env file - AI features will be limited")
+        
         try:
             self.root.get_screen('login').show_startup_loading("Loading...")
         except Exception:

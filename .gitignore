@@ -14,5 +14,10 @@ bin/
 # Local database/artifacts
 library.db
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # OS/editor files
 .DS_Store

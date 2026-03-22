@@ -17,6 +17,7 @@ from user_modules.browse_tab import load_browse_tab
 from user_modules.search_tab import load_search_tab
 from user_modules.profile_tab import load_profile_tab
 from utils import LoadingOverlay
+from ai_chatbot import show_ai_chat
 
 
 class UserDashboard(MDScreen):
@@ -142,13 +143,14 @@ class UserDashboard(MDScreen):
             ('home', 'home', 'Home'),
             ('browse', 'book-open-page-variant', 'Browse'),
             ('search', 'magnify', 'Search'),
-            ('profile', 'account', 'Profile')
+            ('profile', 'account', 'Profile'),
+            ('ai', 'robot-happy', 'AI Chat')
         ]
         
         for tab_id, icon, label in nav_items:
             btn_container = BoxLayout(
                 orientation='vertical',
-                size_hint_x=0.25
+                size_hint_x=0.2
             )
             
             btn = MDIconButton(
@@ -207,6 +209,8 @@ class UserDashboard(MDScreen):
             self.load_search()
         elif tab_id == 'profile':
             self.load_profile()
+        elif tab_id == 'ai':
+            self.load_ai_chat()
     
     def load_home(self):
         """Load home tab"""
@@ -223,6 +227,10 @@ class UserDashboard(MDScreen):
     def load_profile(self):
         """Load profile tab"""
         self._load_tab_with_overlay("Loading profile...", lambda: load_profile_tab(self.content_scroll, self))
+
+    def load_ai_chat(self):
+        """Load AI Chat interface"""
+        show_ai_chat(self.content_scroll, user_id=self.user_id)
 
     def _load_tab_with_overlay(self, message, load_func):
         """Show loading overlay during tab content rebuilds."""
