@@ -9,6 +9,7 @@ This is a reference snippet. Copy/adapt this into your user_modules/user_dashboa
 from ai_chatbot import show_ai_chat
 from kivy.metrics import dp
 from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.boxlayout import MDBoxLayout
 
 # Then in your UserDashboard class, modify the navigation/button area like this:
 
@@ -75,11 +76,14 @@ def open_ai_chat(self, instance):
 # Get the AI module
 try:
     from ai_chatbot import show_ai_chat
+
+    # Example placeholder; replace with actual logged-in user id from your screen state.
+    current_user_id = 1
     
     # Add AI button to your navigation
     ai_btn = MDRaisedButton(
         text="🤖 AI Chat",
-        on_press=lambda x: show_ai_chat(user_id=self.user_id),
+        on_press=lambda x: show_ai_chat(user_id=current_user_id),
         size_hint_y=None,
         height=dp(50),
         md_bg_color=(0.2, 0.6, 0.9, 1)

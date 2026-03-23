@@ -5,6 +5,7 @@ import webbrowser
 import subprocess
 import sys
 import threading
+import importlib
 from kivy.utils import platform as kivy_platform
 from kivy.clock import Clock
 from kivy.uix.modalview import ModalView
@@ -195,7 +196,9 @@ def open_url_in_app_webview(url, title="Reader"):
         return False
 
     try:
-        from jnius import autoclass, cast
+        jnius = importlib.import_module("jnius")
+        autoclass = jnius.autoclass
+        cast = jnius.cast
 
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         Dialog = autoclass('android.app.Dialog')
@@ -248,7 +251,9 @@ def open_url_safely(url):
     try:
         # Check if running on Android
         if kivy_platform == 'android':
-            from jnius import autoclass, cast
+            jnius = importlib.import_module("jnius")
+            autoclass = jnius.autoclass
+            cast = jnius.cast
 
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
             Intent = autoclass('android.content.Intent')
@@ -263,7 +268,8 @@ def open_url_safely(url):
         
         # Check if running on iOS
         try:
-            from pyobjus import autoclass
+            pyobjus = importlib.import_module("pyobjus")
+            autoclass = pyobjus.autoclass
             NSURL = autoclass('NSURL')
             UIApplication = autoclass('UIApplication')
             
