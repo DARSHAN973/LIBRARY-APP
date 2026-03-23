@@ -18,7 +18,10 @@ from user_modules.search_tab import load_search_tab
 from user_modules.profile_tab import load_profile_tab
 from admin_modules.admin_auth import clear_session
 from utils import LoadingOverlay
-from ai_chatbot import show_ai_chat
+try:
+    from ai_chatbot import show_ai_chat
+except Exception:
+    show_ai_chat = None
 
 
 class UserDashboard(MDScreen):
@@ -231,7 +234,12 @@ class UserDashboard(MDScreen):
 
     def load_ai_chat(self):
         """Load AI Chat interface"""
-        show_ai_chat(self.content_scroll, user_id=self.user_id)
+        if show_ai_chat is not None:
+            show_ai_chat(self.content_scroll, user_id=self.user_id)
+        else:
+            from kivy.uix.label import Label
+            self.content_scroll.clear_widgets()
+            self.content_scroll.add_widget(Label(text="AI Chat unavailable", size_hint_y=None, height=dp(40)))
 
     def _load_tab_with_overlay(self, message, load_func):
         """Show loading overlay during tab content rebuilds."""

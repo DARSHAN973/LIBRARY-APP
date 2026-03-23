@@ -10,7 +10,10 @@ from urllib.parse import urljoin
 import json
 from datetime import datetime, date
 
-import requests
+try:
+    import requests
+except Exception:
+    requests = None
 
 
 class RemoteDBError(Exception):
@@ -131,7 +134,7 @@ def connect(database="library.db", timeout=20):
                 api_url = (settings.get("api_base_url") or "").strip()
         except Exception:
             api_url = ""
-    if api_url:
+    if api_url and requests is not None:
         return RemoteConnection(api_url, timeout=timeout)
     return _sqlite3.connect(database)
 

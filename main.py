@@ -3,6 +3,25 @@ Library Mobile App - Main Application
 Multi-option Login: User Login, User Signup, Admin Login
 """
 
+import sys
+import os
+import traceback
+
+
+def _early_crash_log(msg):
+    """Write crash info to stderr and a file — called before Kivy/KivyMD loads."""
+    try:
+        print(msg, file=sys.stderr)
+    except Exception:
+        pass
+    try:
+        _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "startup_crash.log")
+        with open(_p, "a", encoding="utf-8") as _f:
+            _f.write(msg + "\n")
+    except Exception:
+        pass
+
+
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
@@ -841,9 +860,12 @@ class LibraryApp(MDApp):
     def build(self):
         """Build the application"""
         self._install_crash_logger()
-        self.theme_cls.primary_palette = "Blue"
-        self.theme_cls.primary_hue = "500"
-        self.theme_cls.theme_style = "Light"
+        try:
+            self.theme_cls.primary_palette = "Blue"
+            self.theme_cls.primary_hue = "500"
+            self.theme_cls.theme_style = "Light"
+        except Exception as exc:
+            _early_crash_log(f"theme_cls setup warning: {exc}")
         
         # Screen Manager
         sm = ScreenManager()
@@ -895,4 +917,8 @@ class LibraryApp(MDApp):
 
 
 if __name__ == '__main__':
-    LibraryApp().run()
+    try:
+        LibraryApp().run()
+    except Exception:
+        _early_crash_log(traceback.format_exc())
+        raise

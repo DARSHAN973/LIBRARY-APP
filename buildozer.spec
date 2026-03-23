@@ -5,7 +5,7 @@ package.name = libraryapp
 package.domain = org.example.libraryapp
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,db
-requirements = python3,kivy,kivymd,requests,python-dotenv
+requirements = python3,kivy,kivymd==1.2.0,requests,python-dotenv,certifi,urllib3,charset-normalizer,idna
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE

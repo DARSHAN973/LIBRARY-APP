@@ -19,9 +19,18 @@ from kivymd.uix.button import MDRaisedButton, MDIconButton, MDFlatButton
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.spinner import MDSpinner
-from kivymd.uix.chip import MDChip
-from kivymd.uix.selectioncontrol import MDSwitch
-from kivymd.icon_definitions import md_icons
+try:
+    from kivymd.uix.chip import MDChip
+except Exception:
+    MDChip = None
+try:
+    from kivymd.uix.selectioncontrol import MDSwitch
+except Exception:
+    from kivy.uix.switch import Switch as MDSwitch
+try:
+    from kivymd.icon_definitions import md_icons
+except Exception:
+    md_icons = {}
 from functools import partial
 from db_adapter import sqlite3
 from utils import run_with_loading

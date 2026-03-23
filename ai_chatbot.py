@@ -7,7 +7,10 @@ Provides book recommendations, query resolution, and library assistance.
 import json
 import os
 import threading
-import requests
+try:
+    import requests
+except Exception:
+    requests = None
 from datetime import datetime
 from kivy.app import App
 from kivy.clock import Clock
@@ -130,14 +133,14 @@ def query_groq(user_message, chat_history):
     }
     
     try:
+        if requests is None:
+            return "❌ Network library not available. Please check your installation."
         response = requests.post(GROQ_API_URL, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         result = response.json()
         return result["choices"][0]["message"]["content"]
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         return f"❌ API Error: {str(e)[:100]}"
-    except (KeyError, IndexError) as e:
-        return f"❌ Response Error: {str(e)}"
 
 # ─── UI COMPONENTS ──────────────────────────────────────────────────────────
 
