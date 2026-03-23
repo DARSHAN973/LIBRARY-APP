@@ -36,6 +36,18 @@ class LoadingOverlay:
     def _show(self, _dt):
         self._show_event = None
 
+        try:
+            self._render_overlay()
+            self._visible = True
+        except Exception as exc:
+            # Never crash app startup for a cosmetic loader issue.
+            print(f"LoadingOverlay disabled due to UI compatibility issue: {exc}")
+            self._modal = None
+            self._visible = False
+
+    def _render_overlay(self):
+        """Render overlay UI. Isolated so caller can fail safely."""
+
         # Outer card (shadow layer)
         shadow = BoxLayout(
             size_hint=(None, None),
@@ -111,7 +123,6 @@ class LoadingOverlay:
         center_wrap.add_widget(content)
         self._modal.add_widget(center_wrap)
         self._modal.open()
-        self._visible = True
 
     def stop(self):
         if self._show_event is not None:

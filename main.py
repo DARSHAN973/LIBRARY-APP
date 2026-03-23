@@ -826,10 +826,8 @@ class LibraryApp(MDApp):
         else:
             print("⚠️ GROQ_API_KEY not found in .env file - AI features will be limited")
         
-        try:
-            self.root.get_screen('login').show_startup_loading("Loading...")
-        except Exception:
-            pass
+        # Do not show startup loader here; some Android/KivyMD combinations
+        # can fail very early when rendering complex overlay widgets.
         # Avoid blocking UI while remote DB initializes.
         threading.Thread(target=self._initialize_database, daemon=True).start()
 
