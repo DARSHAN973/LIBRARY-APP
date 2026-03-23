@@ -25,23 +25,66 @@ try:
 except Exception:
     def load_dotenv(*_args, **_kwargs):
         return False
-from kivymd.app import MDApp
-from kivymd.uix.screen import MDScreen
 try:
-    from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton, MDIconButton
+    from kivymd.app import MDApp
+    from kivymd.uix.screen import MDScreen
+    try:
+        from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton, MDIconButton
+    except Exception:
+        from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
+        MDRectangleFlatButton = MDFlatButton
+    from kivymd.uix.textfield import MDTextField
+    try:
+        from kivymd.uix.label import MDLabel, MDIcon
+    except Exception:
+        from kivymd.uix.label import MDLabel
+        MDIcon = MDLabel
+    from kivymd.uix.dialog import MDDialog
+    from kivymd.uix.card import MDCard
 except Exception:
-    from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
-    MDRectangleFlatButton = MDFlatButton
-from kivymd.uix.textfield import MDTextField
-try:
-    from kivymd.uix.label import MDLabel, MDIcon
-except Exception:
-    from kivymd.uix.label import MDLabel
-    MDIcon = MDLabel
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.card import MDCard
+    # Graceful fallback to Kivy widgets so app can still start on incompatible KivyMD builds.
+    MDApp = App
+    MDScreen = Screen
+    MDRaisedButton = Button
+    MDFlatButton = Button
+    MDRectangleFlatButton = Button
+    MDIconButton = Button
+    MDTextField = TextInput
+    MDLabel = Label
+    MDIcon = Label
+    MDCard = BoxLayout
+
+    class MDDialog:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        def open(self):
+            return None
+
+        def dismiss(self):
+            return None
 from database import Database
-from utils import LoadingOverlay, run_with_loading
+try:
+    from utils import LoadingOverlay, run_with_loading
+except Exception:
+    class LoadingOverlay:
+        def __init__(self, message="Loading...", delay=0.5):
+            self.message = message
+            self.delay = delay
+
+        def start(self):
+            return None
+
+        def stop(self):
+            return None
+
+    def run_with_loading(_widget, worker, on_success, on_error=None, message="Loading...", delay=0.5):
+        try:
+            result = worker()
+            on_success(result)
+        except Exception as exc:
+            if on_error:
+                on_error(exc)
 
 # Set window size for testing (comment out for mobile deployment)
 # Window.size = (360, 640)

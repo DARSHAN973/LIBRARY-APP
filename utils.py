@@ -10,10 +10,18 @@ from kivy.clock import Clock
 from kivy.uix.modalview import ModalView
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.label import Label
 from kivy.metrics import dp
 from kivy.graphics import Color, RoundedRectangle
-from kivymd.uix.spinner import MDSpinner
-from kivymd.uix.label import MDLabel
+try:
+    from kivymd.uix.spinner import MDSpinner
+except Exception:
+    MDSpinner = None
+
+try:
+    from kivymd.uix.label import MDLabel
+except Exception:
+    MDLabel = Label
 
 
 _ACTIVE_ANDROID_DIALOGS = []
@@ -86,15 +94,25 @@ class LoadingOverlay:
         )
 
         spinner_box = FloatLayout(size_hint_y=None, height=dp(60))
-        spinner_box.add_widget(
-            MDSpinner(
-                size_hint=(None, None),
-                size=(dp(48), dp(48)),
-                pos_hint={'center_x': 0.5, 'center_y': 0.5},
-                active=True,
-                color=(0.13, 0.59, 0.95, 1),
+        if MDSpinner is not None:
+            spinner_box.add_widget(
+                MDSpinner(
+                    size_hint=(None, None),
+                    size=(dp(48), dp(48)),
+                    pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                    active=True,
+                    color=(0.13, 0.59, 0.95, 1),
+                )
             )
-        )
+        else:
+            spinner_box.add_widget(
+                Label(
+                    text="Loading...",
+                    size_hint=(None, None),
+                    size=(dp(120), dp(30)),
+                    pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                )
+            )
         content.add_widget(spinner_box)
 
         content.add_widget(
