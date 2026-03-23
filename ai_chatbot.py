@@ -36,7 +36,8 @@ from kivymd.uix.dialog import MDDialog
 from kivy.metrics import dp
 
 # ─── CONFIGURATION ──────────────────────────────────────────────────────────
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+# API key loaded lazily when chat opens, not at import time
+GROQ_API_KEY = ""
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 def get_data_dir():
@@ -384,6 +385,11 @@ class AIChat(MDBoxLayout):
 
 def show_ai_chat(content_scroll=None, user_id=None):
     """Open AI chat in a modal popup or add to content scroll view."""
+    # Auto-initialize if not already done (lazy loading)
+    global GROQ_API_KEY
+    if not GROQ_API_KEY:
+        init_ai_module()
+    
     chat_widget = AIChat(user_id=user_id)
     
     if content_scroll is not None:
@@ -422,8 +428,17 @@ def show_ai_chat(content_scroll=None, user_id=None):
 
 # ─── INTEGRATION HELPER ──────────────────────────────────────────────────────
 
-def init_ai_module(api_key):
-    """Initialize AI module with API key (call from main.py)."""
+def init_ai_module(api_key=None):
+    """Initialize AI module with API key (call from main.py or lazy-load in chat)."""
     global GROQ_API_KEY
-    GROQ_API_KEY = api_key
+    if api_key:
+        GROQ_API_KEY = api_key
+    else:
+        # Load from environment if not provided
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+        except Exception:
+            pass
     ensure_chat_dir()

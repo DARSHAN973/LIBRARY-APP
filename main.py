@@ -875,25 +875,14 @@ class LibraryApp(MDApp):
         return sm
         
     def on_start(self):
-        """Initialize database and AI module on app start"""
+        """Initialize database on app start - AI loads lazily when needed"""
         print("Library Mobile App Started")
         
-        # Load environmental variables and initialize AI module
-        load_dotenv()
-        groq_api_key = os.getenv("GROQ_API_KEY")
-        if groq_api_key:
-            try:
-                from ai_chatbot import init_ai_module
-                init_ai_module(groq_api_key)
-                print("✅ AI Chatbot Module initialized successfully")
-            except Exception as e:
-                print(f"⚠️ AI Chatbot initialization warning: {e}")
-        else:
-            print("⚠️ GROQ_API_KEY not found in .env file - AI features will be limited")
+        # AI chatbot initialization is now fully lazy - it loads only when
+        # user opens the AI chat screen, not at startup. This prevents any
+        # AI-related import or network issues from blocking app launch.
         
-        # Do not show startup loader here; some Android/KivyMD combinations
-        # can fail very early when rendering complex overlay widgets.
-        # Avoid blocking UI while remote DB initializes.
+        # Initialize database in background
         threading.Thread(target=self._initialize_database, daemon=True).start()
 
     def _initialize_database(self):
