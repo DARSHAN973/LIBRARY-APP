@@ -27,9 +27,17 @@ except Exception:
         return False
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
-from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton, MDIconButton
+try:
+    from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDRectangleFlatButton, MDIconButton
+except Exception:
+    from kivymd.uix.button import MDRaisedButton, MDFlatButton, MDIconButton
+    MDRectangleFlatButton = MDFlatButton
 from kivymd.uix.textfield import MDTextField
-from kivymd.uix.label import MDLabel, MDIcon
+try:
+    from kivymd.uix.label import MDLabel, MDIcon
+except Exception:
+    from kivymd.uix.label import MDLabel
+    MDIcon = MDLabel
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.card import MDCard
 from database import Database
@@ -61,7 +69,13 @@ class LoginScreen(MDScreen):
         self.main_layout.bind(size=self._update_rect, pos=self._update_rect)
         
         # Build the UI
-        self.build_ui()
+        try:
+            self.build_ui()
+        except Exception as exc:
+            # Keep app alive even if some KivyMD widget/property is unsupported.
+            print(f"UI build fallback engaged: {exc}")
+            self.main_layout.add_widget(Label(text="Library App", size_hint_y=None, height=dp(50)))
+            self.main_layout.add_widget(Label(text="UI compatibility mode", size_hint_y=None, height=dp(30)))
         
         scroll.add_widget(self.main_layout)
         self.add_widget(scroll)
