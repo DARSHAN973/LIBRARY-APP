@@ -49,7 +49,7 @@ def get_data_dir():
     except Exception:
         pass
     return os.path.join(os.getcwd(), "data")
-
+        
 
 def get_chat_history_file():
     return os.path.join(get_data_dir(), "chat_history.json")

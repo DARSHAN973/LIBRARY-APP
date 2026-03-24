@@ -1,0 +1,329 @@
+"""
+ai_chatbot.py
+AI-powered chatbot module for library app using Groq API.
+Provides book recommendations, query resolution, and library assistance.
+"""
+
+import json
+import os
+import threading
+import requests
+from datetime import datetime
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.uix.image import Image
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.button import MDRaisedButton, MDFlatButton
+from kivymd.uix.label import MDLabel
+from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.card import MDCard
+from kivymd.uix.dialog import MDDialog
+from kivy.metrics import dp
+
+# ─── CONFIGURATION ──────────────────────────────────────────────────────────
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# Chat history for context
+CHAT_HISTORY_FILE = "data/chat_history.json"
+
+# ─── HELPERS ────────────────────────────────────────────────────────────────
+
+def ensure_chat_dir():
+    """Ensure data directory exists."""
+    os.makedirs("data", exist_ok=True)
+
+def load_chat_history():
+    """Load previous chat messages from file."""
+    ensure_chat_dir()
+    if os.path.exists(CHAT_HISTORY_FILE):
+        try:
+            with open(CHAT_HISTORY_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def save_chat_history(messages):
+    """Save chat messages to file."""
+    ensure_chat_dir()
+    with open(CHAT_HISTORY_FILE, "w") as f:
+        json.dump(messages, f, indent=2)
+
+def get_system_prompt():
+    """System prompt for library assistant AI."""
+    return """You are a helpful library assistant AI. Your role is to:
+1. Answer questions about books (title, author, genre, plot)
+2. Recommend books based on user interests
+3. Help with library features and how to use the app
+4. Suggest reading based on genres or authors
+5. Resolve common user issues with the library app
+
+Be concise, friendly, and helpful. Keep responses under 300 characters when possible.
+Always prioritize helping users find or understand books."""
+
+def query_groq(user_message, chat_history):
+    """Send message to Groq API and get response."""
+    if not GROQ_API_KEY:
+        return "⚠️  AI API key not configured. Please set GROQ_API_KEY environment variable."
+    
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Build messages with context
+    messages = [
+        {"role": "system", "content": get_system_prompt()}
+    ]
+    
+    # Add previous messages (keep last 5 for context)
+    for msg in chat_history[-5:]:
+        messages.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+    
+    # Add current user message
+    messages.append({
+        "role": "user",
+        "content": user_message
+    })
+    
+    payload = {
+        "model": "llama-3.3-70b-versatile",  # Current Groq recommended model
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 512,
+        "top_p": 0.9
+    }
+    
+    try:
+        response = requests.post(GROQ_API_URL, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        ai_response = data["choices"][0]["message"]["content"]
+        return ai_response
+    except Exception as e:
+        return f"❌ Error: {str(e)}. Check API key or internet connection."
+
+# ─── UI COMPONENTS ──────────────────────────────────────────────────────────
+
+class ChatBubble(MDCard):
+    """Individual chat message bubble."""
+    def __init__(self, text, is_user=True, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = "vertical"
+        self.padding = dp(12)
+        self.spacing = dp(8)
+        self.size_hint_y = None
+        self.size_hint_x = 0.9
+        
+        if is_user:
+            offset = dp(20)
+            self.size_hint_x = 0.85
+            offset = dp(20)
+        else:
+            self.md_bg_color = (0.95, 0.95, 0.95, 1)  # Gray for AI
+            self.size_hint_x = 0.9
+            offset = 0
+            height=dp(max(40, len(text) // 3) + 24),
+        msg_label = MDLabel(
+            text=text,
+            theme_text_color="Custom",
+            text_color=(1, 1, 1, 1) if is_user else (0, 0, 0, 1),
+        self.height = msg_label.height + dp(20)
+            height=dp(max(40, len(text) // 3)),
+            halign="left",
+            markup=False
+        )
+        self.add_widget(msg_label)
+        self.height = msg_label.height + dp(24)
+
+
+class AIChat(MDBoxLayout):
+    """Main AI chatbot UI component."""
+    def __init__(self, user_id=None, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = "vertical"
+        self.padding = dp(10)
+        self.spacing = dp(10)
+        self.user_id = user_id
+        
+        # Load chat history
+        self.chat_history = load_chat_history()
+        self.messages = []
+        
+        # Header
+        header = MDLabel(
+            text="📚 Library AI Assistant",
+            theme_text_color="Custom",
+            text_color=(0, 0, 0, 1),
+            font_style="H6",
+            size_hint_y=None,
+            height=dp(40)
+        )
+        self.add_widget(header)
+        
+        # Chat display area
+        self.chat_scroll = MDScrollView(size_hint_y=0.85)
+        self.chat_box = MDBoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=dp(10),
+            size_hint_y=None
+        )
+        self.chat_box.bind(minimum_height=self.chat_box.setter("height"))
+        self.chat_scroll.add_widget(self.chat_box)
+        self.add_widget(self.chat_scroll)
+        
+        # Load and display previous messages
+        self._refresh_messages()
+        
+        # Input area
+        input_box = MDBoxLayout(orientation="horizontal", spacing=dp(8), size_hint_y=0.15)
+        
+        self.message_input = TextInput(
+            multiline=False,
+            hint_text="Ask me about books, recommendations...",
+            size_hint_x=0.85,
+            font_size="12sp"
+        )
+        input_box.add_widget(self.message_input)
+        
+        send_btn = MDRaisedButton(
+            text="Send",
+            size_hint_x=0.15,
+            on_press=self.send_message
+        )
+        input_box.add_widget(send_btn)
+        self.add_widget(input_box)
+    
+    def _refresh_messages(self):
+        """Refresh chat display from history."""
+        self.chat_box.clear_widgets()
+        for msg in self.chat_history:
+            bubble = ChatBubble(
+                text=msg["content"],
+                is_user=(msg["role"] == "user"),
+                size_hint_x=1
+            )
+            self.chat_box.add_widget(bubble)
+        
+        # Auto-scroll to bottom
+        Clock.schedule_once(lambda dt: self._scroll_to_bottom(), 0.1)
+    
+    def _scroll_to_bottom(self):
+        """Auto-scroll to latest message."""
+        self.chat_scroll.scroll_y = 0
+    
+    def send_message(self, instance):
+        """Send user message and get AI response."""
+        user_msg = self.message_input.text.strip()
+        if not user_msg:
+            return
+        
+        # Add user message to display
+        self.message_input.text = ""
+        user_bubble = ChatBubble(text=user_msg, is_user=True, size_hint_x=1)
+        self.chat_box.add_widget(user_bubble)
+        
+        # Add to history
+        self.chat_history.append({
+            "role": "user",
+            "content": user_msg,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Show loading indicator
+        loading_label = MDLabel(
+            text="🤖 AI thinking...",
+            theme_text_color="Custom",
+            text_color=(0.5, 0.5, 0.5, 1),
+            size_hint_y=None,
+            height=dp(30)
+        )
+        self.chat_box.add_widget(loading_label)
+        self._scroll_to_bottom()
+        
+        # Get AI response in background
+        def get_response():
+            response = query_groq(user_msg, self.chat_history)
+            Clock.schedule_once(
+                lambda dt: self._display_ai_response(response, loading_label),
+                0
+            )
+        
+        threading.Thread(target=get_response, daemon=True).start()
+    
+    def _display_ai_response(self, response, loading_label):
+        """Display AI response in chat."""
+        self.chat_box.remove_widget(loading_label)
+        
+        # Add to history
+        self.chat_history.append({
+            "role": "assistant",
+            "content": response,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Save to file
+        save_chat_history(self.chat_history)
+        
+        # Display response
+        ai_bubble = ChatBubble(text=response, is_user=False, size_hint_x=1)
+        self.chat_box.add_widget(ai_bubble)
+        self._scroll_to_bottom()
+    
+    def clear_chat(self):
+        """Clear chat history."""
+        self.chat_history = []
+        self.chat_box.clear_widgets()
+        os.remove(CHAT_HISTORY_FILE) if os.path.exists(CHAT_HISTORY_FILE) else None
+
+
+def show_ai_chat(content_scroll=None, user_id=None):
+    """Open AI chat in a modal popup or add to content scroll view."""
+    chat_widget = AIChat(user_id=user_id, size_hint=(0.95, 0.9))
+    
+    if content_scroll is not None:
+        # Add to content scroll view (for tab integration)
+        content_scroll.clear_widgets()
+        content_scroll.add_widget(chat_widget)
+    else:
+        # Show as popup (original behavior)
+        content = MDBoxLayout(orientation="vertical")
+        content.add_widget(chat_widget)
+        
+        # Close button
+        close_btn = MDFlatButton(
+            text="Close Chat",
+            size_hint_y=0.1,
+            on_press=lambda x: popup.dismiss()
+        )
+        content.add_widget(close_btn)
+        
+        popup = Popup(
+            title="Library AI Assistant",
+            content=content,
+            size_hint=(0.95, 0.9)
+        )
+        popup.open()
+        return popup
+
+
+# ─── INTEGRATION HELPER ──────────────────────────────────────────────────────
+
+def init_ai_module(api_key):
+    """Initialize AI module with API key (call from main.py)."""
+    global GROQ_API_KEY
+    GROQ_API_KEY = api_key
+    ensure_chat_dir()
